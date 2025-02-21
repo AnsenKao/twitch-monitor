@@ -73,9 +73,12 @@ class WebsiteDetector:
         try:
             a_element = element.find_element(By.TAG_NAME, 'a')
             href = a_element.get_attribute("href")
+            if href:
+                href = href.replace(" ", "")
+                print(href)
         except:  # noqa: E722
             href = ""
-        
+        print("aaa", {text: href})
         return {text: href}
 
     async def detect_once(self) -> bool:
@@ -85,16 +88,8 @@ class WebsiteDetector:
             bool: 如果內容有變化返回 True，否則返回 False
         """
         try:
-            # 使用asyncio.to_thread來非阻塞地執行Selenium操作
             items = await asyncio.to_thread(self._detect_sync)
-
-            # 檢查是否有變化
-            has_changed = self.last_items and items != self.last_items
-
-            # 更新最後檢測的項目
             self.last_items = items
-
-            return has_changed
         except Exception as e:
             print(f"Error detecting items: {str(e)}")
             return False
@@ -155,14 +150,13 @@ if __name__ == "__main__":
     async def main():
         detector = WebsiteDetector(
             url="https://www.twitch.tv/shxtou/videos?filter=archives&sort=time",
-            item_selector=r"//*[@data-a-target='video-tower-card-0']",
+            item_selector=r"//*[@data-a-target='video-tower-card-1']",
             headless=True,
             wait_time=600,
         )
         try:
-            has_changed = await detector.detect_once()
-            print(f"Has changed: {has_changed}")
-            print(f"Current items: {json.dumps(detector.last_items, indent=2, ensure_ascii=False)}")
+            await detector.detect_once()
+            print(f"Current items: {detector.last_items}")
         finally:
             detector.close()
 
