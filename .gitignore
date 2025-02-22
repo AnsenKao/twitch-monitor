@@ -2,3 +2,6 @@ __pycache__/
 client_secret.json
 credentials.pkl
 yt-dlp.exe
+*mp4
+*.log
+latest.json

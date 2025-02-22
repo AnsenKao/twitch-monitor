@@ -68,17 +68,15 @@ class WebsiteDetector:
         """
         # 提取文字內容
         text = element.text.strip().split("\n")[0]
-        
+
         # 嘗試從子元素中提取 href 屬性
         try:
-            a_element = element.find_element(By.TAG_NAME, 'a')
+            a_element = element.find_element(By.TAG_NAME, "a")
             href = a_element.get_attribute("href")
             if href:
                 href = href.replace(" ", "")
-                print(href)
         except:  # noqa: E722
             href = ""
-        print("aaa", {text: href})
         return {text: href}
 
     async def detect_once(self) -> bool:

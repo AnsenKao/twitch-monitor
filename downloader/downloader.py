@@ -1,5 +1,6 @@
 import subprocess
 
+
 class YTDLPDownloader:
     def __init__(self, yt_dlp_path):
         """
@@ -17,27 +18,39 @@ class YTDLPDownloader:
         :param output_path: 下載影片的儲存路徑 (可選)
         :return: 下載結果的標準輸出和標準錯誤
         """
-        yt_dlp_args = [self.yt_dlp_path, video_url]
+        yt_dlp_args = [self.yt_dlp_path, video_url, "--progress"]
 
         if output_path:
-            yt_dlp_args.extend(['-o', output_path])
+            yt_dlp_args.extend(["-o", output_path])
 
-        process = subprocess.Popen(yt_dlp_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            process = subprocess.Popen(
+                yt_dlp_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True,
+            )
 
-        # 即時讀取輸出
-        while True:
-            output = process.stdout.readline()
-            if output == '' and process.poll() is not None:
-                break
-            if output:
-                print(output.strip())
-        
-        # 確保所有錯誤訊息也被讀取並輸出
-        stderr_output = process.stderr.read()
-        if stderr_output:
-            print(stderr_output.strip())
+            # 實時讀取並輸出進度
+            for line in process.stdout:
+                print(line, end="", flush=True)
 
-        return process.poll() == 0
+            # 等待進程完成
+            return_code = process.wait(timeout=3600)  # 1小時超時
+            return return_code == 0
+
+        except subprocess.TimeoutExpired:
+            print(f"下載超時: {video_url}")
+            process.kill()
+            return False
+        except Exception as e:
+            print(f"發生未預期的錯誤: {str(e)}")
+            if "process" in locals():
+                process.kill()
+            return False
+
 
 # 使用範例
 if __name__ == "__main__":

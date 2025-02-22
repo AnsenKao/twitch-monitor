@@ -1,42 +1,25 @@
-from detection import WebsiteDetector
-# from downloader import YTDLPDownloader
-# from uploader import YouTubeUploader
+from detection import DetectionFlow
+from downloader import DownloadFlow
+from uploader import UploadFlow
+from config import setup_logger
 import asyncio
 
-import json
+logger = setup_logger(__name__)
 
-async def main():
-    with open("latest.json", "r", encoding="utf-8") as file:
-        latest_data = json.load(file)
-    item_number = 0
-    all_items = []
 
-    detector = WebsiteDetector(
+def main():
+    detection_flow = DetectionFlow(
         url="https://www.twitch.tv/shxtou/videos?filter=archives&sort=time",
-        item_selector=f"//*[@data-a-target='video-tower-card-{item_number}']",
-        headless=True,
-        wait_time=600,
+        item_selector="//*[@data-a-target='video-tower-card-0']",
     )
+    items = asyncio.run(detection_flow.run())
+    download_flow = DownloadFlow(items)
+    download_flow.run()
 
-    while True:
-        await detector.detect_once()
-        detected_item = detector.last_items
-        print(detected_item)
-        if detected_item == latest_data:
-            break
-        
-        all_items.append(detected_item)
-        
-        item_number += 1
-        detector.item_selector = f"//*[@data-a-target='video-tower-card-{item_number}']"
+    upload_flow = UploadFlow()
+    for key, value in items:
+        upload_flow.upload(f"downloader/videos/{key}.mp4", key, value)
 
-    if all_items:
-        with open("latest.json", "w") as file:
-            json.dump(all_items[0], file)
 
-        for item in all_items:
-            value = next(iter(item.values()))
-            print(value)
-
-if __name__=="__main__":
-    asyncio.run(main())
+if __name__ == "__main__":
+    main()
