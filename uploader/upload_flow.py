@@ -1,5 +1,5 @@
 from uploader import YouTubeUploader
-from config import setup_logger
+from utils import setup_logger
 
 logger = setup_logger(__name__)
 

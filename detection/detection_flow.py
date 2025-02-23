@@ -1,5 +1,5 @@
 from detection import WebsiteDetector
-from config import setup_logger
+from utils import setup_logger
 import asyncio
 import json
 

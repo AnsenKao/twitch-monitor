@@ -1,5 +1,5 @@
 from downloader import YTDLPDownloader
-from config import setup_logger
+from utils import setup_logger
 import os
 
 logger = setup_logger(__name__)
