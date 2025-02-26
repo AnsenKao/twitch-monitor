@@ -5,3 +5,4 @@ yt-dlp.exe
 *mp4
 *.log
 latest.json
+.env

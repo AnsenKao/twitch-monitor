@@ -7,17 +7,20 @@ logger = setup_logger(__name__)
 class UploadFlow:
     def __init__(self):
         self.client_secrets_file = "client_secret.json"
-        self.scopes = ["https://www.googleapis.com/auth/youtube.upload"]
+        self.scopes = [
+            "https://www.googleapis.com/auth/youtube.upload",
+            "https://www.googleapis.com/auth/youtube.force-ssl",
+        ]
         self.credentials_file = "credentials.pkl"
         self.uploader = YouTubeUploader(
             self.client_secrets_file, self.scopes, self.credentials_file
         )
 
-    def upload(self, video_file, title, description):
+    def upload(self, video_file, title, description, playlist_id=None):
         try:
             logger.info("Starting upload process...")
             self.uploader.upload_video(
-                video_file, title, description, "22", ["Ansen", "Shoto"]
+                video_file, title, description, "22", ["Ansen", "Shoto"], playlist_id
             )
             logger.info("Upload successful!")
         except Exception as e:

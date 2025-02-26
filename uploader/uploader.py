@@ -39,7 +39,9 @@ class YouTubeUploader:
 
         self.youtube = build("youtube", "v3", credentials=self.credentials)
 
-    def upload_video(self, file_path, title, description, category_id, tags):
+    def upload_video(
+        self, file_path, title, description, category_id, tags, playlist_id=None
+    ):
         body = {
             "snippet": {
                 "title": title,
@@ -64,17 +66,40 @@ class YouTubeUploader:
 
         print(f"Upload Complete! Video ID: {response['id']}")
 
+        if playlist_id:
+            self.add_video_to_playlist(response["id"], playlist_id)
+
+    def add_video_to_playlist(self, video_id, playlist_id):
+        body = {
+            "snippet": {
+                "playlistId": playlist_id,
+                "resourceId": {
+                    "kind": "youtube#video",
+                    "videoId": video_id,
+                },
+            }
+        }
+
+        request = self.youtube.playlistItems().insert(part="snippet", body=body)
+
+        response = request.execute()
+        print(f"Video added to playlist! Playlist Item ID: {response['id']}")
+
 
 if __name__ == "__main__":
     CLIENT_SECRETS_FILE = r"E:\Projects\twitch-monitor\client_secret.json"
-    SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+    SCOPES = [
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.force-ssl",
+    ]
     CREDENTIALS_FILE = r"E:\Projects\twitch-monitor\credentials.pkl"
 
     uploader = YouTubeUploader(CLIENT_SECRETS_FILE, SCOPES, CREDENTIALS_FILE)
-    uploader.upload_video(
-        r"E:\Projects\twitch-monitor\downloaded_video.mp4",
-        "Ansen is handsome",
-        "test",
-        "22",
-        ["Ansen", "Shoto"],
-    )
+    # uploader.upload_video(
+    #     r"E:\Projects\twitch-monitor\downloaded_video.mp4",
+    #     "Ansen is handsome",
+    #     "test",
+    #     "22",
+    #     ["Ansen", "Shoto"],
+    # )
+    uploader.add_video_to_playlist("OC5PBE51Y9A", "PLCqOEsFJbTpCI6bJplqSfmHMsEUupPw3i")
