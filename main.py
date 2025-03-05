@@ -32,7 +32,7 @@ def main():
         download_flow.run()
 
         upload_flow = UploadFlow()
-        for key, value in items:
+        for key, value in items.items():
             logger.info(f"Uploading video: {key}.mp4 with value: {value}")
             upload_flow.upload(f"{videos_root}{key}.mp4", key, value, playlist_id)
 
