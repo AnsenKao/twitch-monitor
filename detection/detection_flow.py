@@ -3,7 +3,7 @@ from utils import setup_logger
 import asyncio
 import json
 
-logger = setup_logger(__name__)
+logger = setup_logger("log")
 
 
 class DetectionFlow(WebsiteDetector):

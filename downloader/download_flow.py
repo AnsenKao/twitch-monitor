@@ -2,7 +2,7 @@ from downloader import YTDLPDownloader
 from utils import setup_logger
 import os
 
-logger = setup_logger(__name__)
+logger = setup_logger("log")
 
 
 class DownloadFlow:
