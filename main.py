@@ -8,7 +8,7 @@ import dotenv
 
 dotenv.load_dotenv()
 
-logger = setup_logger(__name__)
+logger = setup_logger("log")
 videos_root = "downloader/videos/"
 playlist_id = os.getenv("PLAYLIST")
 
@@ -30,6 +30,8 @@ def main():
         download_flow = DownloadFlow(items)
         logger.info("Running download flow")
         download_flow.run()
+        if len(os.listdir(videos_root)) != len(items):
+            logger.error("Detect missing downloaded items")
 
         upload_flow = UploadFlow()
         for key, value in items.items():
