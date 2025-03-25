@@ -4,6 +4,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import pickle
+from utils import setup_logger
+
+logger = setup_logger("log")
 
 
 class YouTubeUploader:
@@ -16,7 +19,7 @@ class YouTubeUploader:
         self.authenticate()
 
     def authenticate(self):
-        """ 授權並獲取 YouTube API Token """
+        """授權並獲取 YouTube API Token"""
         # 1️⃣ 嘗試讀取 `credentials.pkl`
         if os.path.exists(self.credentials_file):
             try:
@@ -50,11 +53,13 @@ class YouTubeUploader:
         self.youtube = build("youtube", "v3", credentials=self.credentials)
 
     def get_new_credentials(self):
-        """ 強制重新登入並獲取新的 token """
+        """強制重新登入並獲取新的 token"""
         flow = InstalledAppFlow.from_client_secrets_file(
             self.client_secrets_file, self.scopes
         )
-        self.credentials = flow.run_local_server(port=8080, access_type="offline", prompt="consent")
+        self.credentials = flow.run_local_server(
+            port=8080, access_type="offline", prompt="consent"
+        )
 
         # 確保 refresh_token 被存儲
         if not self.credentials.refresh_token:
@@ -129,4 +134,4 @@ if __name__ == "__main__":
     #     "22",
     #     ["Ansen", "Shoto"],
     # )
-    uploader.add_video_to_playlist("OC5PBE51Y9A", "PLCqOEsFJbTpCI6bJplqSfmHMsEUupPw3i")
+    # uploader.add_video_to_playlist("OC5PBE51Y9A", "PLCqOEsFJbTpCI6bJplqSfmHMsEUupPw3i")
