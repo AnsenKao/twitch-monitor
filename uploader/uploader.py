@@ -25,29 +25,25 @@ class YouTubeUploader:
             try:
                 with open(self.credentials_file, "rb") as token:
                     self.credentials = pickle.load(token)
-                print("✅ 成功讀取 credentials.pkl")
             except Exception as e:
-                print(f"⚠️ 無法讀取 credentials.pkl: {e}")
+                logger.error(f"⚠️ 無法讀取 credentials.pkl: {e}")
                 self.credentials = None  # 確保無效的 token 不會影響判斷
 
         # 2️⃣ 嘗試刷新 `access_token`
         if self.credentials and self.credentials.expired:
             if self.credentials.refresh_token:
                 try:
-                    print("🔄 正在刷新 access token...")
                     self.credentials.refresh(Request())
-                    print("✅ access token 刷新成功")
                 except Exception as e:
-                    print(f"❌ 無法刷新 token: {e}，需要重新登入")
+                    logger.error(f"❌ 無法刷新 token: {e}，需要重新登入")
                     self.get_new_credentials()  # 強制重新登入
             else:
-                print("❌ 沒有 refresh token，必須重新登入")
+                logger.error("❌ 沒有 refresh token，必須重新登入")
                 self.get_new_credentials()  # 強制重新登入
 
         # 3️⃣ 儲存 `credentials.pkl`
         with open(self.credentials_file, "wb") as token:
             pickle.dump(self.credentials, token)
-        print("✅ credentials.pkl 已更新")
 
         # 4️⃣ 建立 YouTube API 連線
         self.youtube = build("youtube", "v3", credentials=self.credentials)
@@ -63,13 +59,10 @@ class YouTubeUploader:
 
         # 確保 refresh_token 被存儲
         if not self.credentials.refresh_token:
-            print("⚠️ 警告: Google 沒有提供 refresh_token，這可能導致需要頻繁登入！")
-        else:
-            print("✅ 獲取到 refresh_token，可以自動刷新 token")
+            logger.warning("⚠️ 警告: Google 沒有提供 refresh_token，這可能導致需要頻繁登入！")
 
         with open(self.credentials_file, "wb") as token:
             pickle.dump(self.credentials, token)
-        print("✅ 已儲存新的 credentials.pkl")
 
     def upload_video(
         self, file_path, title, description, category_id, tags, playlist_id=None
@@ -115,7 +108,7 @@ class YouTubeUploader:
         request = self.youtube.playlistItems().insert(part="snippet", body=body)
 
         response = request.execute()
-        print(f"Video added to playlist! Playlist Item ID: {response['id']}")
+        logger.info(f"Video added to playlist! Playlist Item ID: {response['id']}")
 
 
 if __name__ == "__main__":

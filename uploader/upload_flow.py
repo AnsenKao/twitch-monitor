@@ -22,7 +22,7 @@ class UploadFlow:
             self.uploader.upload_video(
                 video_file, title, description, "22", ["Ansen", "Shoto"], playlist_id
             )
-            logger.info("Upload successful!")
+            logger.info(f"Upload {title} successful!")
         except Exception as e:
             logger.error(f"An error occurred during upload: {e}")
 
