@@ -6,7 +6,7 @@ from googleapiclient.http import MediaFileUpload
 import pickle
 from utils import setup_logger
 
-logger = setup_logger("log")
+logger = setup_logger("credential")
 
 
 class YouTubeUploader:
