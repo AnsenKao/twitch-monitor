@@ -1,7 +1,7 @@
 from detection import DetectionFlow
 from downloader import DownloadFlow
 from uploader import UploadFlow
-from utils import setup_logger, clear_videos
+from utils import setup_logger
 import asyncio
 import os
 import dotenv
@@ -36,10 +36,11 @@ def main():
         upload_flow = UploadFlow()
         for key, value in items.items():
             logger.info(f"Uploading video: {key}.mp4 with value: {value}")
-            upload_flow.upload(f"{videos_root}{key}.mp4", key, value, playlist_id)
+            video_file = f"{videos_root}{key}.mp4"
+            upload_flow.upload(video_file, key, value, playlist_id)
+            os.remove(video_file)
 
         logger.info("Clearing downloaded videos")
-        clear_videos(videos_root)
     except Exception as e:
         logger.error(f"An error occurred in main process: {e}")
 
@@ -53,14 +54,14 @@ if __name__ == "__main__":
         for video in videos:
             try:
                 logger.info(f"Uploading existing video: {video}")
+                video_path = os.path.join(videos_root, video)
                 upload_flow.upload(
-                    os.path.join(videos_root, video),
+                    video_path,
                     video.split(".mp4")[0],
                     "",
                     playlist_id,
                 )
+                os.remove(video_path)
             except Exception as e:
                 logger.error(f"An error occurred while uploading video {video}: {e}")
 
-        logger.info("Clearing existing videos")
-        clear_videos(videos_root)
