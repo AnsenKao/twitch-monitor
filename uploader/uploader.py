@@ -59,7 +59,9 @@ class YouTubeUploader:
 
         # 確保 refresh_token 被存儲
         if not self.credentials.refresh_token:
-            logger.warning("⚠️ 警告: Google 沒有提供 refresh_token，這可能導致需要頻繁登入！")
+            logger.warning(
+                "⚠️ 警告: Google 沒有提供 refresh_token，這可能導致需要頻繁登入！"
+            )
 
         with open(self.credentials_file, "wb") as token:
             pickle.dump(self.credentials, token)

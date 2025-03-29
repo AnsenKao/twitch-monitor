@@ -1,9 +1,9 @@
 import os
 
 
-def clear_videos(videos_root):
-    files = os.listdir(videos_root)
+def clear_empty_data(root):
+    files = os.listdir(root)
     for file in files:
-        file_path = os.path.join(videos_root, file)
-        if os.path.isfile(file_path):
+        file_path = os.path.join(root, file)
+        if os.path.isfile(file_path) and os.path.getsize(file_path) == 0:
             os.remove(file_path)

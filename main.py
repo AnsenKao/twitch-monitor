@@ -1,7 +1,7 @@
 from detection import DetectionFlow
 from downloader import DownloadFlow
 from uploader import UploadFlow
-from utils import setup_logger
+from utils import setup_logger, clear_empty_data
 import asyncio
 import os
 import dotenv
@@ -43,6 +43,7 @@ def main():
         logger.info("Clearing downloaded videos")
     except Exception as e:
         logger.error(f"An error occurred in main process: {e}")
+    clear_empty_data("logs")
 
 
 if __name__ == "__main__":
@@ -64,4 +65,4 @@ if __name__ == "__main__":
                 os.remove(video_path)
             except Exception as e:
                 logger.error(f"An error occurred while uploading video {video}: {e}")
-
+        clear_empty_data("logs")
