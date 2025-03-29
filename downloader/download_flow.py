@@ -15,7 +15,8 @@ class DownloadFlow:
 
     def download(self):
         for key, value in self.all_items.items():
-            self.path = os.path.join(self.current_dir, "videos", f"{key}.mp4")
+            sanitized_key = key.replace("@", "feat")
+            self.path = os.path.join(self.current_dir, "videos", f"{sanitized_key}.mp4")
             try:
                 # 將 path 傳給 download_video 方法
                 success = self.downloader.download_video(value, self.path)
