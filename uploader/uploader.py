@@ -110,7 +110,6 @@ class YouTubeUploader:
         request = self.youtube.playlistItems().insert(part="snippet", body=body)
 
         response = request.execute()
-        logger.info(f"Video added to playlist! Playlist Item ID: {response['id']}")
 
 
 if __name__ == "__main__":
