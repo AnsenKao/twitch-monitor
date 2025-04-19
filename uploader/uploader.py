@@ -4,7 +4,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import pickle
-from utils import setup_logger
+from utils import setup_logger, clear_empty_data
 
 logger = setup_logger("credential")
 
@@ -109,7 +109,7 @@ class YouTubeUploader:
 
         request = self.youtube.playlistItems().insert(part="snippet", body=body)
 
-        response = request.execute()
+        request.execute()
 
 
 if __name__ == "__main__":
@@ -121,6 +121,7 @@ if __name__ == "__main__":
     CREDENTIALS_FILE = r"E:\Projects\twitch-monitor\credentials.pkl"
 
     uploader = YouTubeUploader(CLIENT_SECRETS_FILE, SCOPES, CREDENTIALS_FILE)
+    clear_empty_data()
     # uploader.upload_video(
     #     r"E:\Projects\twitch-monitor\downloaded_video.mp4",
     #     "Ansen is handsome",

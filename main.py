@@ -24,6 +24,7 @@ def main():
         items = asyncio.run(detection_flow.run())
         if not items:
             logger.info("No items detected, exiting")
+            clear_empty_data("logs")
             return
         logger.info(f"Detected items: {items}")
 
