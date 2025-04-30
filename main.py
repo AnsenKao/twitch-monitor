@@ -41,7 +41,6 @@ def main():
             upload_flow.upload(video_file, key, value, playlist_id)
             os.remove(video_file)
 
-        logger.info("Clearing downloaded videos")
     except Exception as e:
         logger.error(f"An error occurred in main process: {e}")
     clear_empty_data("logs")

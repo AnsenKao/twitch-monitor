@@ -121,7 +121,7 @@ if __name__ == "__main__":
     CREDENTIALS_FILE = r"E:\Projects\twitch-monitor\credentials.pkl"
 
     uploader = YouTubeUploader(CLIENT_SECRETS_FILE, SCOPES, CREDENTIALS_FILE)
-    clear_empty_data()
+    clear_empty_data("E:/Projects/twitch-monitor/logs")
     # uploader.upload_video(
     #     r"E:\Projects\twitch-monitor\downloaded_video.mp4",
     #     "Ansen is handsome",
