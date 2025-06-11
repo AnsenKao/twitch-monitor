@@ -15,7 +15,11 @@ class DownloadFlow:
 
     def download(self):
         for key, value in self.all_items.items():
-            sanitized_key = key.replace("@", "feat")
+            # 將 Windows 不允許的檔名字元都替換掉
+            sanitized_key = key
+            for ch in r'\/:*?"<>|':
+                sanitized_key = sanitized_key.replace(ch, "_")
+            sanitized_key = sanitized_key.replace("@", "feat")
             self.path = os.path.join(self.current_dir, "videos", f"{sanitized_key}.mp4")
             try:
                 # 將 path 傳給 download_video 方法
