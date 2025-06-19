@@ -1,10 +1,8 @@
-from detection import DetectionFlow
-from downloader import DownloadFlow
-from uploader import UploadFlow
-from utils import setup_logger, clear_empty_data
-import asyncio
 import os
+import argparse
 import dotenv
+from utils import setup_logger
+from flows import auto_detect_and_upload, single_url_flow, upload_existing_videos
 
 dotenv.load_dotenv()
 
@@ -12,57 +10,15 @@ logger = setup_logger("log")
 videos_root = "downloader/videos/"
 playlist_id = os.getenv("PLAYLIST")
 
-
-def main():
-    try:
-        logger.info("Starting main process")
-        detection_flow = DetectionFlow(
-            url="https://www.twitch.tv/shxtou/videos?filter=archives&sort=time",
-            item_selector="//*[@data-a-target='video-tower-card-0']",
-        )
-        logger.info("Running detection flow")
-        items = asyncio.run(detection_flow.run())
-        if not items:
-            logger.info("No items detected, exiting")
-            clear_empty_data("logs")
-            return
-        logger.info(f"Detected items: {items}")
-
-        download_flow = DownloadFlow(items)
-        logger.info("Running download flow")
-        download_flow.run()
-        if len(os.listdir(videos_root)) != len(items):
-            logger.error("Detect missing downloaded items")
-
-        upload_flow = UploadFlow()
-        for key, value in items.items():
-            logger.info(f"Uploading video: {key}.mp4 with value: {value}")
-            video_file = f"{videos_root}{key}.mp4"
-            upload_flow.upload(video_file, key, value, playlist_id)
-            os.remove(video_file)
-
-    except Exception as e:
-        logger.error(f"An error occurred in main process: {e}")
-    clear_empty_data("logs")
-
-
 if __name__ == "__main__":
-    videos = os.listdir(videos_root)
-    if not videos:
-        main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--url', type=str, help='Download and upload a single video by URL')
+    args = parser.parse_args()
+    if args.url:
+        single_url_flow(args.url, playlist_id)
     else:
-        upload_flow = UploadFlow()
-        for video in videos:
-            try:
-                logger.info(f"Uploading existing video: {video}")
-                video_path = os.path.join(videos_root, video)
-                upload_flow.upload(
-                    video_path,
-                    video.split(".mp4")[0],
-                    "",
-                    playlist_id,
-                )
-                os.remove(video_path)
-            except Exception as e:
-                logger.error(f"An error occurred while uploading video {video}: {e}")
-        clear_empty_data("logs")
+        videos = os.listdir(videos_root)
+        if not videos:
+            auto_detect_and_upload(playlist_id)
+        else:
+            upload_existing_videos(playlist_id)
