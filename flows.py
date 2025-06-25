@@ -4,6 +4,10 @@ from uploader import UploadFlow
 from utils import setup_logger, clear_empty_data
 import asyncio
 import os
+import requests
+from bs4 import BeautifulSoup
+import re
+import time
 
 logger = setup_logger("log")
 videos_root = "downloader/videos/"
@@ -48,9 +52,23 @@ def auto_detect_and_upload(playlist_id):
 def single_url_flow(url, playlist_id):
     try:
         logger.info(f"Processing single URL: {url}")
-        detection_item = {url: url}  # key/value 都用 url，或可自訂
+        # 只抓 meta[name=title] 當作 stream title
+        try:
+            resp = requests.get(url)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            meta_title = soup.find('meta', {'name': 'title'})
+            if meta_title and meta_title.has_attr('content') and meta_title['content'].strip():
+                stream_title = meta_title['content']
+            else:
+                raise ValueError('No stream title found in meta[name=title]')
+        except Exception as e:
+            logger.error(f"Failed to fetch stream title: {e}")
+            stream_title = f"video_{int(time.time())}"
+        logger.info(f"Using stream title for filename: {stream_title}")
+        # 交給 DownloadFlow 處理檔名合法化
+        detection_item = {stream_title: url}
         download_flow = DownloadFlow(detection_item)
-        logger.info("Running download flow for single URL")
+        logger.info(f"Running download flow for single URL, title: {stream_title}")
         download_flow.run()
         key = list(detection_item.keys())[0]
         video_file = f"{videos_root}{key}.mp4"
