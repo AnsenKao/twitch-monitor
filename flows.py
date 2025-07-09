@@ -6,7 +6,6 @@ import asyncio
 import os
 import requests
 from bs4 import BeautifulSoup
-import re
 import time
 
 logger = setup_logger("log")
@@ -34,15 +33,8 @@ def auto_detect_and_upload(playlist_id):
         if len(os.listdir(videos_root)) != len(items):
             logger.error("Detect missing downloaded items")
 
-        upload_flow = UploadFlow()
-        for key, value in items.items():
-            logger.info(f"Uploading video: {key}.mp4 with value: {value}")
-            video_file = f"{videos_root}{key}.mp4"
-            try:
-                upload_flow.upload(video_file, key, value, playlist_id)
-                os.remove(video_file)  # 只有上傳成功才刪除
-            except Exception as e:
-                logger.error(f"An error occurred while uploading video {key}: {e}")
+        # 下載完直接呼叫 upload_existing_videos
+        upload_existing_videos(playlist_id)
 
     except Exception as e:
         logger.error(f"An error occurred in main process: {e}")
@@ -70,15 +62,8 @@ def single_url_flow(url, playlist_id):
         download_flow = DownloadFlow(detection_item)
         logger.info(f"Running download flow for single URL, title: {stream_title}")
         download_flow.run()
-        key = list(detection_item.keys())[0]
-        video_file = f"{videos_root}{key}.mp4"
-        upload_flow = UploadFlow()
-        logger.info(f"Uploading video: {key}.mp4 with value: {url}")
-        try:
-            upload_flow.upload(video_file, key, url, playlist_id)
-            os.remove(video_file)  # 只有上傳成功才刪除
-        except Exception as e:
-            logger.error(f"An error occurred while uploading video {key}: {e}")
+        # 下載完直接呼叫 upload_existing_videos
+        upload_existing_videos(playlist_id)
     except Exception as e:
         logger.error(f"An error occurred in single_url_flow: {e}")
     clear_empty_data("logs")
