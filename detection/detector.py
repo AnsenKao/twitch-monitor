@@ -3,14 +3,7 @@ from datetime import datetime
 import json
 from dataclasses import dataclass
 import asyncio
-from selenium import webdriver
-from selenium.webdriver.edge.service import Service
-from selenium.webdriver.edge.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
-from webdriver_manager.microsoft import EdgeChromiumDriverManager
+from playwright.async_api import async_playwright
 
 
 @dataclass
@@ -32,52 +25,7 @@ class WebsiteDetector:
         self.item_selector = item_selector
         self.wait_time = wait_time
         self.last_items: Dict[str, str] = {}
-
-        self.edge_options = Options()
-        if headless:
-            self.edge_options.add_argument("--headless")
-        self.edge_options.add_argument("--inprivate")
-        self.edge_options.add_argument("--disable-extensions")
-        self.edge_options.add_argument("--disable-gpu")
-        self.edge_options.add_argument("--disable-webgpu")
-        self.edge_options.add_argument("--disable-webgl")
-        self.edge_options.add_argument("--no-sandbox")
-        self.edge_options.add_argument("--disable-dev-shm-usage")
-
-        # 初始化WebDriver
-        self.driver = None
-        self._setup_driver()
-
-    def _setup_driver(self):
-        """設置WebDriver"""
-        if self.driver is not None:
-            self.driver.quit()
-
-        edge_driver_path = EdgeChromiumDriverManager().install()
-
-        try:
-            service = Service(executable_path=edge_driver_path)
-            self.driver = webdriver.Edge(service=service, options=self.edge_options)
-        except Exception as e:
-            print(f"EdgeDriver 初始化失敗: {str(e)}")
-            raise
-
-    def _extract_item_data(self, element) -> str:
-        """
-        從元素中提取文字內容和 href 屬性
-        """
-        # 提取文字內容
-        text = element.text.strip().split("\n")[0]
-
-        # 嘗試從子元素中提取 href 屬性
-        try:
-            a_element = element.find_element(By.TAG_NAME, "a")
-            href = a_element.get_attribute("href")
-            if href:
-                href = href.replace(" ", "")
-        except:  # noqa: E722
-            href = ""
-        return {text: href}
+        self.headless = headless
 
     async def detect_once(self) -> bool:
         """
@@ -86,33 +34,31 @@ class WebsiteDetector:
             bool: 如果內容有變化返回 True，否則返回 False
         """
         try:
-            items = await asyncio.to_thread(self._detect_sync)
+            items = await self._detect_async()
             self.last_items = items
+            return True
         except Exception as e:
             print(f"Error detecting items: {str(e)}")
             return False
 
-    def _detect_sync(self) -> Dict[str, str]:
-        """同步執行檢測操作"""
-        try:
-            self.driver.get(self.url)
-
-            # 等待元素出現
-            wait = WebDriverWait(self.driver, self.wait_time)
-            elements = wait.until(
-                EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, self.item_selector)
-                    if self.item_selector.strip()[0] not in ["/", "("]
-                    else (By.XPATH, self.item_selector)
-                )
-            )
+    async def _detect_async(self) -> Dict[str, str]:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=self.headless)
+            page = await browser.new_page()
+            await page.goto(self.url)
+            await page.wait_for_selector(self.item_selector, timeout=self.wait_time * 1000)
+            elements = await page.query_selector_all(self.item_selector)
             items = {}
             for element in elements:
-                item_data = self._extract_item_data(element)
-                items.update(item_data)
+                text = await element.inner_text()
+                a_tag = await element.query_selector('a')
+                href = await a_tag.get_attribute('href') if a_tag else ""
+                # 自動補全 Twitch 相對路徑
+                if href and not href.startswith("http"):
+                    href = f"https://www.twitch.tv{href}"
+                items[text.strip().split("\n")[0]] = href.replace(" ", "") if href else ""
+            await browser.close()
             return items
-        except TimeoutException:
-            raise TimeoutException(f"等待元素 '{self.item_selector}' 超時")
 
     async def monitor(self, interval_seconds: int = 60) -> None:
         """
@@ -132,9 +78,7 @@ class WebsiteDetector:
             await asyncio.sleep(interval_seconds)
 
     def close(self):
-        """關閉WebDriver"""
-        if self.driver is not None:
-            self.driver.quit()
+        pass  # Playwright 自動關閉
 
     async def __aenter__(self):
         return self
@@ -148,9 +92,9 @@ if __name__ == "__main__":
     async def main():
         detector = WebsiteDetector(
             url="https://www.twitch.tv/shxtou/videos?filter=archives&sort=time",
-            item_selector=r"//*[@data-a-target='video-tower-card-1']",
+            item_selector='[data-a-target^="video-tower-card-"]',
             headless=True,
-            wait_time=600,
+            wait_time=15,
         )
         try:
             await detector.detect_once()
