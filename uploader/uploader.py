@@ -119,7 +119,7 @@ if __name__ == "__main__":
         "https://www.googleapis.com/auth/youtube.force-ssl",
     ]
     CREDENTIALS_FILE = r"E:\Projects\twitch-monitor\credentials.pkl"
-
+    print("Starting YouTube uploader...")
     uploader = YouTubeUploader(CLIENT_SECRETS_FILE, SCOPES, CREDENTIALS_FILE)
     clear_empty_data("E:/Projects/twitch-monitor/logs")
     # uploader.upload_video(

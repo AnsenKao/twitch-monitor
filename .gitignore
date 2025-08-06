@@ -6,3 +6,4 @@ yt-dlp.exe
 *.log
 latest.json
 .env
+.venv
