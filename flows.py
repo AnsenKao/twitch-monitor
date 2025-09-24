@@ -70,19 +70,59 @@ def single_url_flow(url, playlist_id):
 
 
 def upload_existing_videos(playlist_id):
-    videos = os.listdir(videos_root)
     upload_flow = UploadFlow()
-    for video in videos:
+    
+    # 獲取所有需要上傳的影片（包含切割片段）
+    videos_to_upload = []
+    
+    for item in os.listdir(videos_root):
+        item_path = os.path.join(videos_root, item)
+        
+        if os.path.isfile(item_path) and item.endswith('.mp4'):
+            # 這是一個普通的影片檔案
+            videos_to_upload.append({
+                'path': item_path,
+                'name': item.split(".mp4")[0],
+                'type': 'single'
+            })
+        elif os.path.isdir(item_path) and item.endswith('_segments'):
+            # 這是一個切割片段目錄
+            logger.info(f"Found segments directory: {item}")
+            segment_files = [f for f in os.listdir(item_path) if f.endswith('.mp4')]
+            segment_files.sort()  # 確保按順序上傳
+            
+            for segment_file in segment_files:
+                segment_path = os.path.join(item_path, segment_file)
+                videos_to_upload.append({
+                    'path': segment_path,
+                    'name': segment_file.split(".mp4")[0],
+                    'type': 'segment'
+                })
+    
+    # 上傳所有影片
+    for video_info in videos_to_upload:
         try:
-            logger.info(f"Uploading existing video: {video}")
-            video_path = os.path.join(videos_root, video)
+            logger.info(f"Uploading video: {video_info['name']} (type: {video_info['type']})")
             upload_flow.upload(
-                video_path,
-                video.split(".mp4")[0],
+                video_info['path'],
+                video_info['name'],
                 "",
                 playlist_id,
             )
-            os.remove(video_path)  # 只有上傳成功才刪除
+            os.remove(video_info['path'])  # 只有上傳成功才刪除
+            logger.info(f"Successfully uploaded and removed: {video_info['path']}")
         except Exception as e:
-            logger.error(f"An error occurred while uploading video {video}: {e}")
+            logger.error(f"An error occurred while uploading video {video_info['name']}: {e}")
+    
+    # 清理空的 segments 目錄
+    for item in os.listdir(videos_root):
+        item_path = os.path.join(videos_root, item)
+        if os.path.isdir(item_path) and item.endswith('_segments'):
+            try:
+                if not os.listdir(item_path):  # 如果目錄是空的
+                    os.rmdir(item_path)
+                    logger.info(f"Removed empty segments directory: {item_path}")
+            except Exception as e:
+                logger.error(f"Error removing segments directory {item_path}: {e}")
+    
     clear_empty_data("logs")
