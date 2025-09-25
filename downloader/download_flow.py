@@ -32,7 +32,7 @@ class DownloadFlow:
                 if success:
                     logger.info(f"{value} has been downloaded to {self.path}")
                     
-                    # 檢查影片是否超過12小時，如果是則進行切割
+                    # 檢查影片是否超過6小時，如果是則進行切割
                     self._check_and_split_video(self.path, sanitized_key)
                 else:
                     logger.error(f"Failed to download {value}")
@@ -66,13 +66,16 @@ class DownloadFlow:
                     for i, segment in enumerate(segments, 1):
                         logger.info(f"  Part {i}: {segment}")
                     
-                    # 可選：刪除原始檔案以節省空間
-                    # os.remove(video_path)
-                    # logger.info(f"Removed original file: {video_path}")
+                    # 切割成功後刪除原始檔案以節省空間
+                    try:
+                        os.remove(video_path)
+                        logger.info(f"Removed original file: {video_path}")
+                    except Exception as e:
+                        logger.error(f"Failed to remove original file {video_path}: {str(e)}")
                 else:
                     logger.error(f"Failed to split video: {video_name}")
             else:
-                logger.info(f"Video {video_name} is under 12 hours, no splitting needed")
+                logger.info(f"Video {video_name} is under 6 hours, no splitting needed")
                 
         except Exception as e:
             logger.error(f"Error checking/splitting video {video_name}: {str(e)}")
