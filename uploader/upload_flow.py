@@ -23,8 +23,12 @@ class UploadFlow:
                 video_file, title, description, "22", ["Ansen", "Shoto"], playlist_id
             )
             logger.info(f"Upload {title} successful!")
+            return True  # 上傳成功
         except Exception as e:
             logger.error(f"An error occurred during upload: {e}")
+            # 不管什麼錯誤都不刪除文件，讓用戶手動處理
+            logger.warning(f"Upload failed for '{title}', file will be kept for manual handling.")
+            return False  # 上傳失敗，不刪除文件
 
 
 if __name__ == "__main__":
