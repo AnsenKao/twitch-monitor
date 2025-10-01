@@ -41,24 +41,24 @@ class DownloadFlow:
 
     def _check_and_split_video(self, video_path, video_name):
         """
-        檢查影片長度，如果超過6小時則切割成6小時的片段
+        檢查影片長度，如果超過10小時則切割成10小時的片段
         
         :param video_path: 影片檔案路徑
         :param video_name: 影片名稱（用於建立切割檔案的目錄）
         """
         try:
-            # 檢查影片是否超過6小時
-            if self.video_processor.is_video_long(video_path, threshold_hours=6):
-                logger.info(f"Video {video_name} is longer than 6 hours, starting to split...")
+            # 檢查影片是否超過10小時
+            if self.video_processor.is_video_long(video_path, threshold_hours=10):
+                logger.info(f"Video {video_name} is longer than 10 hours, starting to split...")
 
                 # 建立切割檔案的輸出目錄
                 split_output_dir = os.path.join(self.current_dir, "videos", f"{video_name}_segments")
-                
-                # 切割影片（每6小時一段）
+
+                # 切割影片（每10小時一段）
                 segments = self.video_processor.split_video_by_time(
                     input_path=video_path,
                     output_dir=split_output_dir,
-                    segment_duration_hours=6
+                    segment_duration_hours=10
                 )
                 
                 if segments:
