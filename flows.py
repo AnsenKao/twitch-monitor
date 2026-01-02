@@ -20,26 +20,54 @@ def auto_detect_and_upload(playlist_id):
             item_selector="//*[@data-a-target='video-tower-card-0']",
         )
         logger.info("Running detection flow")
-        items = asyncio.run(detection_flow.run())
-        if not items:
+        items_dict = asyncio.run(detection_flow.run())
+        
+        if not items_dict:
             logger.info("No items detected, exiting")
             clear_empty_data("logs")
             return
-        logger.info(f"Detected items: {items}")
-
-        download_flow = DownloadFlow(items)
-        logger.info("Running download flow")
-        download_flow.run()
+            
+        logger.info(f"Detected items: {items_dict}")
         
-        # 檢查下載結果（考慮切割後的檔案結構）
-        downloaded_content = os.listdir(videos_root)
-        if not downloaded_content:
-            logger.error("No content found after download")
-        else:
-            logger.info(f"Download completed. Found {len(downloaded_content)} items in videos directory")
+        # Convert to list and reverse to process Oldest -> Newest
+        items_list = list(items_dict.items())
+        items_list.reverse()
+        
+        logger.info(f"Processing {len(items_list)} items sequentially")
 
-        # 下載完直接呼叫 upload_existing_videos
-        upload_existing_videos(playlist_id)
+        for title, url in items_list:
+            logger.info(f"--- Processing item: {title} ---")
+            
+            # Ensure clean state (optional warning)
+            if os.listdir(videos_root):
+                 logger.warning(f"Videos directory not empty before download: {os.listdir(videos_root)}")
+
+            # Download
+            detection_item = {title: url}
+            download_flow = DownloadFlow(detection_item)
+            logger.info(f"Downloading: {title}")
+            download_flow.run()
+            
+            # Check if download produced files
+            if not os.listdir(videos_root):
+                 logger.error(f"Download failed for {title} (no files found in {videos_root}). Stopping workflow.")
+                 break
+            
+            # Upload
+            logger.info(f"Uploading content for: {title}")
+            upload_success = upload_existing_videos(playlist_id)
+            
+            if upload_success:
+                # Double check if directory is empty after upload (upload_existing_videos should clean up)
+                if not os.listdir(videos_root):
+                    logger.info(f"Successfully processed {title}. Updating trace.")
+                    detection_flow.update_latest(url)
+                else:
+                     logger.warning(f"Upload reported success but files remain in {videos_root}. Not updating trace to be safe.")
+                     break
+            else:
+                logger.error(f"Failed to upload {title}. Stopping workflow to preserve order.")
+                break
 
     except Exception as e:
         logger.error(f"An error occurred in main process: {e}")
@@ -101,6 +129,7 @@ def single_url_flow(url, playlist_id):
 
 def upload_existing_videos(playlist_id):
     upload_flow = UploadFlow()
+    all_success = True
     
     # 獲取所有需要上傳的影片（包含切割片段）
     videos_to_upload = []
@@ -130,6 +159,9 @@ def upload_existing_videos(playlist_id):
                 })
     
     # 上傳所有影片
+    if not videos_to_upload:
+        logger.info("No videos found to upload.")
+    
     for video_info in videos_to_upload:
         logger.info(f"Uploading video: {video_info['name']} (type: {video_info['type']})")
         upload_success = upload_flow.upload(
@@ -144,6 +176,7 @@ def upload_existing_videos(playlist_id):
             logger.info(f"Successfully uploaded and removed: {video_info['path']}")
         else:
             logger.warning(f"Upload failed for {video_info['name']}, file kept at: {video_info['path']}")
+            all_success = False
     
     # 清理空的 segments 目錄
     for item in os.listdir(videos_root):
@@ -155,5 +188,6 @@ def upload_existing_videos(playlist_id):
                     logger.info(f"Removed empty segments directory: {item_path}")
             except Exception as e:
                 logger.error(f"Error removing segments directory {item_path}: {e}")
-    
+                
     clear_empty_data("logs")
+    return all_success and (len(videos_to_upload) > 0 or not os.listdir(videos_root))

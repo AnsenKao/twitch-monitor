@@ -16,24 +16,30 @@ class DetectionFlow(WebsiteDetector):
     def load_latest_data(self):
         try:
             with open("latest.json", "r", encoding="utf-8") as file:
-                latest_data = json.load(file)
-                logger.info(f"Successfully loaded latest.json: {latest_data}")
-                return latest_data
+                data = json.load(file)
+                logger.info(f"Successfully loaded latest.json: {data}")
+                # Handle legacy format {"Title": "URL"}
+                if isinstance(data, dict):
+                    return next(iter(data.values())) if data else ""
+                return data
         except FileNotFoundError:
             logger.error("latest.json not found")
-            return {}
+            return ""
 
     async def detect_items(self):
         while True:
             logger.info(f"Detecting item number: {self.item_number}")
             await self.detect_once()
             detected_item = self.last_items
+            
+            # Extract URL from detected_item which is {Title: URL}
+            detected_url = next(iter(detected_item.values())) if detected_item else ""
 
-            if detected_item == self.latest_data and self.item_number == 0:
+            if detected_url == self.latest_data and self.item_number == 0:
                 logger.info("No new items detected, ending detection")
                 break
 
-            elif detected_item == self.latest_data:
+            elif detected_url == self.latest_data:
                 logger.info("Update to latest!")
                 break
 
@@ -45,21 +51,19 @@ class DetectionFlow(WebsiteDetector):
                 f"//*[@data-a-target='video-tower-card-{self.item_number}']"
             )
 
-    def update_latest(self):
-        if self.all_items:
-            logger.info(f"Total new items found: {len(self.all_items)}")
+    def update_latest(self, url):
+        if url:
             try:
                 with open("latest.json", "w", encoding="utf-8") as file:
-                    json.dump(self.all_items[0], file)
-                    logger.info("Successfully updated latest.json")
+                    json.dump(url, file)
+                    logger.info(f"Successfully updated latest.json with url: {url}")
             except Exception as e:
                 logger.error(f"Error updating latest.json: {str(e)}")
         else:
-            logger.info("No new items to process")
+            logger.warning("No url provided to update latest.json")
 
     async def run(self):
         await self.detect_items()
-        self.update_latest()
         self.close()
         return {k: v for d in self.all_items for k, v in d.items()}
 
