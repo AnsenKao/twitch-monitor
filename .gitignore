@@ -7,3 +7,4 @@ yt-dlp.exe
 latest.json
 .env
 .venv
+.DS_Store

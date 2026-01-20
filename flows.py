@@ -1,5 +1,7 @@
 from detection import DetectionFlow
+from detection.monitor import StreamMonitor
 from downloader import DownloadFlow
+from downloader.recorder import StreamRecorder
 from uploader import UploadFlow
 from utils import setup_logger, clear_empty_data
 import asyncio
@@ -191,3 +193,59 @@ def upload_existing_videos(playlist_id):
                 
     clear_empty_data("logs")
     return all_success and (len(videos_to_upload) > 0 or not os.listdir(videos_root))
+    return all_success and (len(videos_to_upload) > 0 or not os.listdir(videos_root))
+
+
+def live_monitor_flow(channel_name, playlist_id, check_interval=30):
+    monitor = StreamMonitor()
+    recorder = StreamRecorder()
+    channel_url = f"https://www.twitch.tv/{channel_name}"
+    
+    logger.info(f"Starting live monitor for channel: {channel_name}")
+    
+    while True:
+        try:
+            # Check if channel is live
+            stream_info = monitor.check_live_status(channel_url)
+            
+            if stream_info:
+                logger.info(f"{channel_name} is LIVE! Preparing to record...")
+                
+                # Create a filename based on timestamp
+                timestamp = int(time.time())
+                ts_filename = f"{channel_name}_{timestamp}.ts"
+                mp4_filename = f"{channel_name}_{timestamp}.mp4"
+                ts_path = os.path.join(videos_root, ts_filename)
+                output_path = os.path.join(videos_root, mp4_filename)
+                
+                # Start recording to .ts (resilient to interruption)
+                success = recorder.start_recording(channel_url, ts_path)
+                
+                if success and os.path.exists(ts_path):
+                    logger.info("Recording finished. Remuxing to MP4...")
+                    
+                    # Remux to MP4
+                    remux_success = recorder.remux_video(ts_path, output_path)
+                    
+                    if remux_success:
+                        # Remove the original TS file
+                        os.remove(ts_path)
+                        logger.info("Remuxing successful and TS file removed. Starting upload...")
+                        # Upload the recorded file
+                        upload_existing_videos(playlist_id)
+                    else:
+                        logger.error("Remuxing failed. Keeping TS file.")
+                else:
+                    logger.warning("Recording finished but no file created or failed.")
+            else:
+                # logger.info(f"{channel_name} is offline. Checking again in {check_interval}s...")
+                pass
+            
+            time.sleep(check_interval)
+            
+        except KeyboardInterrupt:
+            logger.info("Monitor stopped by user.")
+            break
+        except Exception as e:
+            logger.error(f"Error in live_monitor_flow: {e}")
+            time.sleep(check_interval)
