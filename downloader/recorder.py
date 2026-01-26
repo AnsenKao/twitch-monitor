@@ -6,7 +6,7 @@ from utils import setup_logger
 
 class StreamRecorder:
     def __init__(self):
-        self.logger = setup_logger("Recorder")
+        self.logger = setup_logger("Recorder", log_file="recorder.log")
 
     def start_recording(self, channel_url, output_path):
         """

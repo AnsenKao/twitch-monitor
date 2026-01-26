@@ -3,7 +3,7 @@ from streamlink import Streamlink
 
 class StreamMonitor:
     def __init__(self):
-        self.logger = setup_logger("Monitor")
+        self.logger = setup_logger("Monitor", log_file="monitor.log")
         self.session = Streamlink()
 
     def check_live_status(self, channel_url):
