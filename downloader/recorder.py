@@ -29,7 +29,14 @@ class StreamRecorder:
         try:
              # streamlink <url> best -o <output>
             process = subprocess.Popen(
-                ["streamlink", channel_url, "best", "-o", output_path],
+                ["streamlink", 
+                 "--hls-live-restart", 
+                 "--stream-segment-threads", "5", 
+                 "--stream-segment-attempts", "5", 
+                 "--stream-segment-timeout", "20", 
+                 "--retry-streams", "30", 
+                 "--retry-max", "5", 
+                 channel_url, "best", "-o", output_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
