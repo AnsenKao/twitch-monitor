@@ -12,6 +12,7 @@ dependencies = [
     "playwright>=1.54.0",
     "python-dotenv>=1.1.1",
     "requests>=2.32.4",
+    "streamlink>=8.1.2",
     "webdriver-manager>=4.0.2",
     "yt-dlp>=2025.7.21",
 ]
