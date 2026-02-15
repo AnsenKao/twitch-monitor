@@ -48,12 +48,14 @@ def auto_detect_and_upload(playlist_id):
             detection_item = {title: url}
             download_flow = DownloadFlow(detection_item)
             logger.info(f"Downloading: {title}")
-            download_flow.run()
+            if not download_flow.run():
+                 logger.error(f"Download failed for {title}. Skipping to next item.")
+                 continue
             
             # Check if download produced files
             if not os.listdir(videos_root):
-                 logger.error(f"Download failed for {title} (no files found in {videos_root}). Stopping workflow.")
-                 break
+                 logger.error(f"Download reported success but no files found in {videos_root}. Skipping to next item.")
+                 continue
             
             # Upload
             logger.info(f"Uploading content for: {title}")
@@ -121,9 +123,11 @@ def single_url_flow(url, playlist_id):
         detection_item = {stream_title: url}
         download_flow = DownloadFlow(detection_item)
         logger.info(f"Running download flow for single URL, title: {stream_title}")
-        download_flow.run()
-        # 下載完直接呼叫 upload_existing_videos
-        upload_existing_videos(playlist_id)
+        if download_flow.run():
+            # 下載完直接呼叫 upload_existing_videos
+            upload_existing_videos(playlist_id)
+        else:
+            logger.error(f"Download failed for {stream_title}. Skipping upload.")
     except Exception as e:
         logger.error(f"An error occurred in single_url_flow: {e}")
     clear_empty_data("logs")

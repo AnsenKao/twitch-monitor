@@ -17,6 +17,7 @@ class DownloadFlow:
         self.video_processor = VideoProcessor()
 
     def download(self):
+        all_success = True
         for key, value in self.all_items.items():
             # 將 Windows 不允許的檔名字元都替換掉，並去除 emoji
             sanitized_key = key
@@ -36,8 +37,11 @@ class DownloadFlow:
                     self._check_and_split_video(self.path, sanitized_key)
                 else:
                     logger.error(f"Failed to download {value}")
+                    all_success = False
             except Exception as e:
                 logger.error(f"Error downloading {value}: {str(e)}")
+                all_success = False
+        return all_success
 
     def _check_and_split_video(self, video_path, video_name):
         """
@@ -81,4 +85,4 @@ class DownloadFlow:
             logger.error(f"Error checking/splitting video {video_name}: {str(e)}")
 
     def run(self):
-        self.download()
+        return self.download()
