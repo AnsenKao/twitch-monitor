@@ -5,6 +5,7 @@ yt-dlp.exe
 *mp4
 *.log
 latest.json
+notified_videos.json
 .env
 .venv
 .DS_Store
