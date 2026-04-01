@@ -20,7 +20,7 @@ if __name__ == "__main__":
     elif args.monitor:
         live_monitor_flow(args.monitor, playlist_id)
     else:
-        videos = os.listdir(videos_root)
+        videos = [f for f in os.listdir(videos_root) if not f.startswith('.')]
         if not videos:
             auto_detect_and_upload(playlist_id)
         else:
