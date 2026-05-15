@@ -19,6 +19,9 @@ class UploadFlow:
     def upload(self, video_file, title, description, playlist_id=None):
         try:
             logger.info("Starting upload process...")
+            if len(title) > 100:
+                logger.warning(f"Title too long ({len(title)} chars), truncating to 100: {title}")
+                title = title[:97] + "..."
             self.uploader.upload_video(
                 video_file, title, description, "22", ["Ansen", "Shoto"], playlist_id
             )
