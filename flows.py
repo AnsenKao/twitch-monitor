@@ -3,7 +3,7 @@ from detection.monitor import StreamMonitor
 from downloader import DownloadFlow
 from downloader.recorder import StreamRecorder
 from uploader import UploadFlow
-from utils import setup_logger, clear_empty_data
+from utils import setup_logger, clear_empty_data, send_discord
 import asyncio
 import os
 import requests
@@ -50,6 +50,7 @@ def auto_detect_and_upload(playlist_id):
             logger.info(f"Downloading: {title}")
             if not download_flow.run():
                  logger.error(f"Download failed for {title}. Skipping to next item.")
+                 send_discord(f"❌ 下載失敗：{title}")
                  continue
             
             # Check if download produced files
@@ -65,12 +66,15 @@ def auto_detect_and_upload(playlist_id):
                 # Double check if directory is empty after upload (upload_existing_videos should clean up)
                 if not os.listdir(videos_root):
                     logger.info(f"Successfully processed {title}. Updating trace.")
+                    send_discord(f"✅ 下載並上傳完成：{title}")
                     detection_flow.update_latest(url)
                 else:
                      logger.warning(f"Upload reported success but files remain in {videos_root}. Not updating trace to be safe.")
+                     send_discord(f"⚠️ 上傳完成但目錄仍有殘留檔案：{title}")
                      break
             else:
                 logger.error(f"Failed to upload {title}. Stopping workflow to preserve order.")
+                send_discord(f"❌ 上傳失敗：{title}")
                 break
 
     except Exception as e:
@@ -125,9 +129,14 @@ def single_url_flow(url, playlist_id):
         logger.info(f"Running download flow for single URL, title: {stream_title}")
         if download_flow.run():
             # 下載完直接呼叫 upload_existing_videos
-            upload_existing_videos(playlist_id)
+            upload_success = upload_existing_videos(playlist_id)
+            if upload_success:
+                send_discord(f"✅ 下載並上傳完成：{stream_title}")
+            else:
+                send_discord(f"❌ 上傳失敗：{stream_title}")
         else:
             logger.error(f"Download failed for {stream_title}. Skipping upload.")
+            send_discord(f"❌ 下載失敗：{stream_title}")
     except Exception as e:
         logger.error(f"An error occurred in single_url_flow: {e}")
     clear_empty_data("logs")
@@ -214,6 +223,7 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
             
             if stream_info:
                 logger.info(f"{channel_name} is LIVE! Preparing to record...")
+                send_discord(f"🔴 {channel_name} 開始直播，準備錄製...")
                 
                 # Create a filename based on timestamp
                 timestamp = int(time.time())
@@ -236,11 +246,17 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                         os.remove(ts_path)
                         logger.info("Remuxing successful and TS file removed. Starting upload...")
                         # Upload the recorded file
-                        upload_existing_videos(playlist_id)
+                        upload_success = upload_existing_videos(playlist_id)
+                        if upload_success:
+                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成")
+                        else:
+                            send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗")
                     else:
                         logger.error("Remuxing failed. Keeping TS file.")
+                        send_discord(f"❌ {channel_name} 錄製後轉檔失敗")
                 else:
                     logger.warning("Recording finished but no file created or failed.")
+                    send_discord(f"❌ {channel_name} 錄製失敗，無法產生檔案")
             else:
                 # logger.info(f"{channel_name} is offline. Checking again in {check_interval}s...")
                 pass
