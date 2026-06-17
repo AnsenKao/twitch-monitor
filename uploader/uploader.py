@@ -91,10 +91,13 @@ class YouTubeUploader:
             if status:
                 print(f"Uploaded {int(status.progress() * 100)}%")
 
-        print(f"Upload Complete! Video ID: {response['id']}")
+        video_id = response["id"]
+        print(f"Upload Complete! Video ID: {video_id}")
 
         if playlist_id:
-            self.add_video_to_playlist(response["id"], playlist_id)
+            self.add_video_to_playlist(video_id, playlist_id)
+
+        return video_id
 
     def add_video_to_playlist(self, video_id, playlist_id):
         body = {

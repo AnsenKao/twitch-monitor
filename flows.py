@@ -60,21 +60,27 @@ def auto_detect_and_upload(playlist_id):
             
             # Upload
             logger.info(f"Uploading content for: {title}")
-            upload_success = upload_existing_videos(playlist_id)
-            
+            upload_success, yt_urls = upload_existing_videos(playlist_id)
+
             if upload_success:
                 # Double check if directory is empty after upload (upload_existing_videos should clean up)
                 if not os.listdir(videos_root):
                     logger.info(f"Successfully processed {title}. Updating trace.")
-                    send_discord(f"✅ 下載並上傳完成：{title}")
+                    if len(yt_urls) == 1:
+                        yt_links = f"YouTube：{yt_urls[0]}"
+                    elif yt_urls:
+                        yt_links = "\n".join(f"YouTube ({i+1})：{u}" for i, u in enumerate(yt_urls))
+                    else:
+                        yt_links = "（無 YouTube 連結）"
+                    send_discord(f"✅ 下載並上傳完成：{title}\nTwitch：{url}\n{yt_links}")
                     detection_flow.update_latest(url)
                 else:
-                     logger.warning(f"Upload reported success but files remain in {videos_root}. Not updating trace to be safe.")
-                     send_discord(f"⚠️ 上傳完成但目錄仍有殘留檔案：{title}")
-                     break
+                    logger.warning(f"Upload reported success but files remain in {videos_root}. Not updating trace to be safe.")
+                    send_discord(f"⚠️ 上傳完成但目錄仍有殘留檔案：{title}\nTwitch：{url}")
+                    break
             else:
                 logger.error(f"Failed to upload {title}. Stopping workflow to preserve order.")
-                send_discord(f"❌ 上傳失敗：{title}")
+                send_discord(f"❌ 上傳失敗：{title}\nTwitch：{url}")
                 break
 
     except Exception as e:
@@ -129,14 +135,20 @@ def single_url_flow(url, playlist_id):
         logger.info(f"Running download flow for single URL, title: {stream_title}")
         if download_flow.run():
             # 下載完直接呼叫 upload_existing_videos
-            upload_success = upload_existing_videos(playlist_id)
+            upload_success, yt_urls = upload_existing_videos(playlist_id)
             if upload_success:
-                send_discord(f"✅ 下載並上傳完成：{stream_title}")
+                if len(yt_urls) == 1:
+                    yt_links = f"YouTube：{yt_urls[0]}"
+                elif yt_urls:
+                    yt_links = "\n".join(f"YouTube ({i+1})：{u}" for i, u in enumerate(yt_urls))
+                else:
+                    yt_links = "（無 YouTube 連結）"
+                send_discord(f"✅ 下載並上傳完成：{stream_title}\nTwitch：{url}\n{yt_links}")
             else:
-                send_discord(f"❌ 上傳失敗：{stream_title}")
+                send_discord(f"❌ 上傳失敗：{stream_title}\nTwitch：{url}")
         else:
             logger.error(f"Download failed for {stream_title}. Skipping upload.")
-            send_discord(f"❌ 下載失敗：{stream_title}")
+            send_discord(f"❌ 下載失敗：{stream_title}\nTwitch：{url}")
     except Exception as e:
         logger.error(f"An error occurred in single_url_flow: {e}")
     clear_empty_data("logs")
@@ -145,7 +157,8 @@ def single_url_flow(url, playlist_id):
 def upload_existing_videos(playlist_id):
     upload_flow = UploadFlow()
     all_success = True
-    
+    youtube_urls = []
+
     # 獲取所有需要上傳的影片（包含切割片段）
     videos_to_upload = []
     
@@ -179,14 +192,15 @@ def upload_existing_videos(playlist_id):
     
     for video_info in videos_to_upload:
         logger.info(f"Uploading video: {video_info['name']} (type: {video_info['type']})")
-        upload_success = upload_flow.upload(
+        yt_url = upload_flow.upload(
             video_info['path'],
             video_info['name'],
             "",
             playlist_id,
         )
-        
-        if upload_success:
+
+        if yt_url:
+            youtube_urls.append(yt_url)
             os.remove(video_info['path'])  # 只有上傳成功才刪除
             logger.info(f"Successfully uploaded and removed: {video_info['path']}")
         else:
@@ -205,8 +219,8 @@ def upload_existing_videos(playlist_id):
                 logger.error(f"Error removing segments directory {item_path}: {e}")
                 
     clear_empty_data("logs")
-    return all_success and (len(videos_to_upload) > 0 or not os.listdir(videos_root))
-    return all_success and (len(videos_to_upload) > 0 or not os.listdir(videos_root))
+    success = all_success and (len(videos_to_upload) > 0 or not os.listdir(videos_root))
+    return success, youtube_urls
 
 
 def live_monitor_flow(channel_name, playlist_id, check_interval=30):
@@ -246,11 +260,17 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                         os.remove(ts_path)
                         logger.info("Remuxing successful and TS file removed. Starting upload...")
                         # Upload the recorded file
-                        upload_success = upload_existing_videos(playlist_id)
+                        upload_success, yt_urls = upload_existing_videos(playlist_id)
                         if upload_success:
-                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成")
+                            if len(yt_urls) == 1:
+                                yt_links = f"YouTube：{yt_urls[0]}"
+                            elif yt_urls:
+                                yt_links = "\n".join(f"YouTube ({i+1})：{u}" for i, u in enumerate(yt_urls))
+                            else:
+                                yt_links = "（無 YouTube 連結）"
+                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成\nTwitch：{channel_url}\n{yt_links}")
                         else:
-                            send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗")
+                            send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗\nTwitch：{channel_url}")
                     else:
                         logger.error("Remuxing failed. Keeping TS file.")
                         send_discord(f"❌ {channel_name} 錄製後轉檔失敗")

@@ -22,16 +22,15 @@ class UploadFlow:
             if len(title) > 100:
                 logger.warning(f"Title too long ({len(title)} chars), truncating to 100: {title}")
                 title = title[:97] + "..."
-            self.uploader.upload_video(
+            video_id = self.uploader.upload_video(
                 video_file, title, description, "22", ["Ansen", "Shoto"], playlist_id
             )
             logger.info(f"Upload {title} successful!")
-            return True  # 上傳成功
+            return f"https://www.youtube.com/watch?v={video_id}"  # 回傳 YouTube 連結
         except Exception as e:
             logger.error(f"An error occurred during upload: {e}")
-            # 不管什麼錯誤都不刪除文件，讓用戶手動處理
             logger.warning(f"Upload failed for '{title}', file will be kept for manual handling.")
-            return False  # 上傳失敗，不刪除文件
+            return None  # 上傳失敗
 
 
 if __name__ == "__main__":
