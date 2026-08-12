@@ -268,9 +268,9 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                                 yt_links = "\n".join(f"YouTube ({i+1})：{u}" for i, u in enumerate(yt_urls))
                             else:
                                 yt_links = "（無 YouTube 連結）"
-                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成\nTwitch：{channel_url}\n{yt_links}")
+                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成\n{yt_links}")
                         else:
-                            send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗\nTwitch：{channel_url}")
+                            send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗")
                     else:
                         logger.error("Remuxing failed. Keeping TS file.")
                         send_discord(f"❌ {channel_name} 錄製後轉檔失敗")
