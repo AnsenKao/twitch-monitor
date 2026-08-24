@@ -126,7 +126,11 @@ def single_url_flow(url, playlist_id):
 
 
 def upload_existing_videos(playlist_id):
-    upload_flow = UploadFlow()
+    try:
+        upload_flow = UploadFlow()
+    except Exception as e:
+        logger.error(f"Failed to initialize UploadFlow (authentication error): {e}")
+        return False, []
     all_success = True
     youtube_urls = []
 
