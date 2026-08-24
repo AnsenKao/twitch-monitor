@@ -1,5 +1,5 @@
 from detection import DetectionFlow
-from detection.monitor import StreamMonitor
+from detection.monitor import StreamMonitor, get_twitch_metadata
 from downloader import DownloadFlow
 from downloader.recorder import StreamRecorder
 from uploader import UploadFlow
@@ -91,42 +91,13 @@ def auto_detect_and_upload(playlist_id):
 def single_url_flow(url, playlist_id):
     try:
         logger.info(f"Processing single URL: {url}")
-        # 使用 Playwright 獲取 Twitch 影片標題
-        try:
-            from playwright.sync_api import sync_playwright
-            
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                
-                # 設置 User-Agent
-                page.set_extra_http_headers({
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                })
-                
-                logger.info(f"Loading page: {url}")
-                page.goto(url, wait_until='networkidle', timeout=30000)
-                
-                # 等待內容載入
-                page.wait_for_timeout(2000)
-                
-                # 使用主要的標題選擇器
-                stream_title_elem = page.query_selector('p[data-a-target="stream-title"]')
-                if stream_title_elem:
-                    stream_title = stream_title_elem.text_content().strip()
-                    if stream_title:
-                        logger.info(f"Successfully extracted title: {stream_title}")
-                        browser.close()
-                        # 這裡不能 return，需要繼續執行下載流程
-                    else:
-                        browser.close()
-                        raise ValueError('Stream title element is empty')
-                else:
-                    browser.close()
-                    raise ValueError('Stream title element not found')
-                
-        except Exception as e:
-            logger.error(f"Failed to fetch stream title with Playwright: {e}")
+        # 用 streamlink 取得 Twitch 標題（VOD 與直播網址皆適用）
+        metadata = get_twitch_metadata(url, logger=logger)
+        stream_title = (metadata.get("title") or "").strip() if metadata else ""
+        if stream_title:
+            logger.info(f"Successfully extracted title: {stream_title}")
+        else:
+            logger.error(f"Failed to fetch stream title for {url}, falling back to timestamp")
             stream_title = f"video_{int(time.time())}"
         logger.info(f"Using stream title for filename: {stream_title}")
         # 交給 DownloadFlow 處理檔名合法化
