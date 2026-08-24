@@ -7,13 +7,20 @@ _EMOJI_PATTERN = re.compile(r'[\U00010000-\U0010ffff\u2600-\u26FF\u2700-\u27BF]+
 _CONTROL_PATTERN = re.compile(r'[\x00-\x1f\x7f]')
 _WHITESPACE_PATTERN = re.compile(r'\s+')
 
+# APFS/HFS+ 的單一檔名上限是 255 bytes（Windows 與 exFAT 算的是字元數，
+# 所以只有 macOS 這端會踩到）。預留空間給後續會接在檔名後面的東西：
+#   _part000.mp4 （切割片段，12 bytes）、_2 之類的防覆蓋序號
+# 全 ASCII 標題約 235 字，全中日文約 78 字才會觸發截斷。
+MAX_FILENAME_BYTES = 235
 
-def sanitize_filename(name: str, fallback: str = "") -> str:
+
+def sanitize_filename(name: str, fallback: str = "", max_bytes: int = MAX_FILENAME_BYTES) -> str:
     """
     把影片標題轉成可用的檔名（不含副檔名）。
 
     :param name: 原始標題
     :param fallback: 淨化後為空時使用的名稱
+    :param max_bytes: 檔名的 UTF-8 位元組上限
     :return: 淨化後的檔名
     """
     sanitized = name or ""
@@ -24,6 +31,12 @@ def sanitize_filename(name: str, fallback: str = "") -> str:
     sanitized = _CONTROL_PATTERN.sub("", sanitized)
     # emoji 移除後常留下連續空白
     sanitized = _WHITESPACE_PATTERN.sub(" ", sanitized).strip()
-    # Windows 不允許檔名結尾是點或空白
+
+    encoded = sanitized.encode("utf-8")
+    if len(encoded) > max_bytes:
+        # errors="ignore" 會丟掉結尾被切斷的多位元組序列
+        sanitized = encoded[:max_bytes].decode("utf-8", errors="ignore")
+
+    # Windows 不允許檔名結尾是點或空白（截斷也可能留下結尾空白）
     sanitized = sanitized.rstrip(". ")
     return sanitized or fallback
