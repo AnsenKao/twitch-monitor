@@ -3,7 +3,7 @@ from detection.monitor import StreamMonitor
 from downloader import DownloadFlow
 from downloader.recorder import StreamRecorder
 from uploader import UploadFlow
-from utils import setup_logger, clear_empty_data, send_discord
+from utils import setup_logger, clear_empty_data, send_discord, sanitize_filename
 import asyncio
 import os
 import requests
@@ -223,6 +223,21 @@ def upload_existing_videos(playlist_id):
     return success, youtube_urls
 
 
+def _resolve_output_name(base_name, fallback_name):
+    """
+    避免和既有檔案同名（例如上次上傳失敗留下的檔案）而被覆蓋。
+    """
+    candidate = base_name or fallback_name
+    suffix = 2
+    while any(
+        os.path.exists(os.path.join(videos_root, f"{candidate}{ext}"))
+        for ext in (".ts", ".mp4")
+    ):
+        candidate = f"{base_name}_{suffix}"
+        suffix += 1
+    return candidate
+
+
 def live_monitor_flow(channel_name, playlist_id, check_interval=30):
     monitor = StreamMonitor()
     recorder = StreamRecorder()
@@ -236,15 +251,21 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
             stream_info = monitor.check_live_status(channel_url)
             
             if stream_info:
-                logger.info(f"{channel_name} is LIVE! Preparing to record...")
-                send_discord(f"🔴 {channel_name} 開始直播，準備錄製...")
-                
-                # Create a filename based on timestamp
-                timestamp = int(time.time())
-                ts_filename = f"{channel_name}_{timestamp}.ts"
-                mp4_filename = f"{channel_name}_{timestamp}.mp4"
-                ts_path = os.path.join(videos_root, ts_filename)
-                output_path = os.path.join(videos_root, mp4_filename)
+                stream_title = (stream_info.get("title") or "").strip()
+                logger.info(f"{channel_name} is LIVE! Title: {stream_title or '(無標題)'}")
+                if stream_title:
+                    send_discord(f"🔴 {channel_name} 開始直播，準備錄製...\n標題：{stream_title}")
+                else:
+                    send_discord(f"🔴 {channel_name} 開始直播，準備錄製...")
+
+                # 以直播標題當檔名（同時也會成為 YouTube 影片標題），沒有標題才退回時間戳
+                fallback_name = f"{channel_name}_{int(time.time())}"
+                base_name = _resolve_output_name(
+                    sanitize_filename(stream_title, fallback=fallback_name), fallback_name
+                )
+                logger.info(f"Using filename: {base_name}")
+                ts_path = os.path.join(videos_root, f"{base_name}.ts")
+                output_path = os.path.join(videos_root, f"{base_name}.mp4")
                 
                 # Start recording to .ts (resilient to interruption)
                 success = recorder.start_recording(channel_url, ts_path)
@@ -268,7 +289,7 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                                 yt_links = "\n".join(f"YouTube ({i+1})：{u}" for i, u in enumerate(yt_urls))
                             else:
                                 yt_links = "（無 YouTube 連結）"
-                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成\n{yt_links}")
+                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成：{base_name}\n{yt_links}")
                         else:
                             send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗")
                     else:
