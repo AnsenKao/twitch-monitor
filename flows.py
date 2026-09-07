@@ -60,7 +60,7 @@ def auto_detect_and_upload(playlist_id):
             
             # Upload
             logger.info(f"Uploading content for: {title}")
-            upload_success, yt_urls = upload_existing_videos(playlist_id)
+            upload_success, yt_urls, _ = upload_existing_videos(playlist_id)
 
             if upload_success:
                 # Double check if directory is empty after upload (upload_existing_videos should clean up)
@@ -101,7 +101,7 @@ def single_url_flow(url, playlist_id):
         logger.info(f"Running download flow for single URL, title: {stream_title}")
         if download_flow.run():
             # 下載完直接呼叫 upload_existing_videos
-            upload_success, yt_urls = upload_existing_videos(playlist_id)
+            upload_success, yt_urls, _ = upload_existing_videos(playlist_id)
             if upload_success:
                 yt_links = format_yt_links(yt_urls)
                 send_discord(f"✅ 下載並上傳完成：{stream_title}\nTwitch：{url}\n{yt_links}")
@@ -120,9 +120,10 @@ def upload_existing_videos(playlist_id):
         upload_flow = UploadFlow()
     except Exception as e:
         logger.error(f"Failed to initialize UploadFlow (authentication error): {e}")
-        return False, []
+        return False, [], []
     all_success = True
     youtube_urls = []
+    uploaded_names = []
 
     # 獲取所有需要上傳的影片（包含切割片段）
     videos_to_upload = []
@@ -166,6 +167,7 @@ def upload_existing_videos(playlist_id):
 
         if yt_url:
             youtube_urls.append(yt_url)
+            uploaded_names.append(video_info['name'])
             os.remove(video_info['path'])  # 只有上傳成功才刪除
             logger.info(f"Successfully uploaded and removed: {video_info['path']}")
         else:
@@ -185,14 +187,18 @@ def upload_existing_videos(playlist_id):
                 
     clear_empty_data("logs")
     success = all_success and (len(videos_to_upload) > 0 or not os.listdir(videos_root))
-    return success, youtube_urls
+    return success, youtube_urls, uploaded_names
 
 
 def upload_existing_flow(playlist_id):
     """videos 目錄已有檔案時的獨立入口（例如上次上傳失敗留下的檔案）。"""
-    upload_success, yt_urls = upload_existing_videos(playlist_id)
+    upload_success, yt_urls, names = upload_existing_videos(playlist_id)
     if upload_success:
-        send_discord(f"✅ 既有影片上傳完成\n{format_yt_links(yt_urls)}")
+        if len(names) == 1:
+            headline = f"✅ 既有影片上傳完成：{names[0]}"
+        else:
+            headline = f"✅ 既有影片上傳完成（{len(names)} 部）"
+        send_discord(f"{headline}\n{format_yt_links(yt_urls)}")
     else:
         send_discord("❌ 既有影片上傳失敗，檔案保留於 videos 目錄")
     return upload_success, yt_urls
@@ -256,7 +262,7 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                         os.remove(ts_path)
                         logger.info("Remuxing successful and TS file removed. Starting upload...")
                         # Upload the recorded file
-                        upload_success, yt_urls = upload_existing_videos(playlist_id)
+                        upload_success, yt_urls, _ = upload_existing_videos(playlist_id)
                         if upload_success:
                             yt_links = format_yt_links(yt_urls)
                             send_discord(f"✅ {channel_name} 直播錄製並上傳完成：{base_name}\n{yt_links}")
