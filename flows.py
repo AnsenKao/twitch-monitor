@@ -3,7 +3,7 @@ from detection.monitor import StreamMonitor, get_twitch_metadata
 from downloader import DownloadFlow
 from downloader.recorder import StreamRecorder
 from uploader import UploadFlow
-from utils import setup_logger, clear_empty_data, send_discord, sanitize_filename
+from utils import setup_logger, clear_empty_data, send_discord, format_yt_links, sanitize_filename
 import asyncio
 import os
 import requests
@@ -66,12 +66,7 @@ def auto_detect_and_upload(playlist_id):
                 # Double check if directory is empty after upload (upload_existing_videos should clean up)
                 if not os.listdir(videos_root):
                     logger.info(f"Successfully processed {title}. Updating trace.")
-                    if len(yt_urls) == 1:
-                        yt_links = f"YouTube：{yt_urls[0]}"
-                    elif yt_urls:
-                        yt_links = "\n".join(f"YouTube ({i+1})：{u}" for i, u in enumerate(yt_urls))
-                    else:
-                        yt_links = "（無 YouTube 連結）"
+                    yt_links = format_yt_links(yt_urls)
                     send_discord(f"✅ 下載並上傳完成：{title}\nTwitch：{url}\n{yt_links}")
                     detection_flow.update_latest(url)
                 else:
@@ -108,12 +103,7 @@ def single_url_flow(url, playlist_id):
             # 下載完直接呼叫 upload_existing_videos
             upload_success, yt_urls = upload_existing_videos(playlist_id)
             if upload_success:
-                if len(yt_urls) == 1:
-                    yt_links = f"YouTube：{yt_urls[0]}"
-                elif yt_urls:
-                    yt_links = "\n".join(f"YouTube ({i+1})：{u}" for i, u in enumerate(yt_urls))
-                else:
-                    yt_links = "（無 YouTube 連結）"
+                yt_links = format_yt_links(yt_urls)
                 send_discord(f"✅ 下載並上傳完成：{stream_title}\nTwitch：{url}\n{yt_links}")
             else:
                 send_discord(f"❌ 上傳失敗：{stream_title}\nTwitch：{url}")
@@ -198,6 +188,16 @@ def upload_existing_videos(playlist_id):
     return success, youtube_urls
 
 
+def upload_existing_flow(playlist_id):
+    """videos 目錄已有檔案時的獨立入口（例如上次上傳失敗留下的檔案）。"""
+    upload_success, yt_urls = upload_existing_videos(playlist_id)
+    if upload_success:
+        send_discord(f"✅ 既有影片上傳完成\n{format_yt_links(yt_urls)}")
+    else:
+        send_discord("❌ 既有影片上傳失敗，檔案保留於 videos 目錄")
+    return upload_success, yt_urls
+
+
 def _resolve_output_name(base_name, fallback_name):
     """
     避免和既有檔案同名（例如上次上傳失敗留下的檔案）而被覆蓋。
@@ -258,12 +258,7 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                         # Upload the recorded file
                         upload_success, yt_urls = upload_existing_videos(playlist_id)
                         if upload_success:
-                            if len(yt_urls) == 1:
-                                yt_links = f"YouTube：{yt_urls[0]}"
-                            elif yt_urls:
-                                yt_links = "\n".join(f"YouTube ({i+1})：{u}" for i, u in enumerate(yt_urls))
-                            else:
-                                yt_links = "（無 YouTube 連結）"
+                            yt_links = format_yt_links(yt_urls)
                             send_discord(f"✅ {channel_name} 直播錄製並上傳完成：{base_name}\n{yt_links}")
                         else:
                             send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗")

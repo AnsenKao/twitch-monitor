@@ -2,7 +2,7 @@ import os
 import argparse
 import dotenv
 from utils import setup_logger
-from flows import auto_detect_and_upload, single_url_flow, upload_existing_videos, live_monitor_flow
+from flows import auto_detect_and_upload, single_url_flow, upload_existing_flow, live_monitor_flow
 
 dotenv.load_dotenv()
 
@@ -24,4 +24,4 @@ if __name__ == "__main__":
         if not videos:
             auto_detect_and_upload(playlist_id)
         else:
-            upload_existing_videos(playlist_id)
+            upload_existing_flow(playlist_id)
