@@ -60,13 +60,13 @@ def auto_detect_and_upload(playlist_id):
             
             # Upload
             logger.info(f"Uploading content for: {title}")
-            upload_success, yt_urls, _ = upload_existing_videos(playlist_id)
+            upload_success, yt_urls, uploaded_names = upload_existing_videos(playlist_id)
 
             if upload_success:
                 # Double check if directory is empty after upload (upload_existing_videos should clean up)
                 if not os.listdir(videos_root):
                     logger.info(f"Successfully processed {title}. Updating trace.")
-                    yt_links = format_yt_links(yt_urls)
+                    yt_links = format_yt_links(yt_urls, uploaded_names)
                     send_discord(f"✅ 下載並上傳完成：{title}\nTwitch：{url}\n{yt_links}")
                     detection_flow.update_latest(url)
                 else:
@@ -101,9 +101,9 @@ def single_url_flow(url, playlist_id):
         logger.info(f"Running download flow for single URL, title: {stream_title}")
         if download_flow.run():
             # 下載完直接呼叫 upload_existing_videos
-            upload_success, yt_urls, _ = upload_existing_videos(playlist_id)
+            upload_success, yt_urls, uploaded_names = upload_existing_videos(playlist_id)
             if upload_success:
-                yt_links = format_yt_links(yt_urls)
+                yt_links = format_yt_links(yt_urls, uploaded_names)
                 send_discord(f"✅ 下載並上傳完成：{stream_title}\nTwitch：{url}\n{yt_links}")
             else:
                 send_discord(f"❌ 上傳失敗：{stream_title}\nTwitch：{url}")
@@ -198,7 +198,7 @@ def upload_existing_flow(playlist_id):
             headline = f"✅ 既有影片上傳完成：{names[0]}"
         else:
             headline = f"✅ 既有影片上傳完成（{len(names)} 部）"
-        send_discord(f"{headline}\n{format_yt_links(yt_urls)}")
+        send_discord(f"{headline}\n{format_yt_links(yt_urls, names)}")
     else:
         send_discord("❌ 既有影片上傳失敗，檔案保留於 videos 目錄")
     return upload_success, yt_urls
@@ -265,9 +265,9 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                         upload_success, yt_urls, _ = upload_existing_videos(playlist_id)
                         if upload_success:
                             yt_links = format_yt_links(yt_urls)
-                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成：{base_name}\n{yt_links}")
+                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成：{stream_title or base_name}\n{yt_links}")
                         else:
-                            send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗")
+                            send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗：{stream_title or base_name}")
                     else:
                         logger.error("Remuxing failed. Keeping TS file.")
                         send_discord(f"❌ {channel_name} 錄製後轉檔失敗")

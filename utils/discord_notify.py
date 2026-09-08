@@ -18,9 +18,15 @@ def send_discord(message: str) -> None:
         print(f"Discord 通知發送失敗: {e}")
 
 
-def format_yt_links(yt_urls) -> str:
+def format_yt_links(yt_urls, names=None) -> str:
     if not yt_urls:
         return "（無 YouTube 連結）"
     if len(yt_urls) == 1:
         return f"YouTube：{yt_urls[0]}"
+    # names 由呼叫端與 yt_urls 一一對應地累積，長度不符時退回純連結列表
+    if names and len(names) == len(yt_urls):
+        return "\n".join(
+            f"YouTube ({i + 1})：{n}\n{u}"
+            for i, (n, u) in enumerate(zip(names, yt_urls))
+        )
     return "\n".join(f"YouTube ({i + 1})：{u}" for i, u in enumerate(yt_urls))
