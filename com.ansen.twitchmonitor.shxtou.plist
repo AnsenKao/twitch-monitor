@@ -16,9 +16,12 @@
         <key>SuccessfulExit</key>
         <false/>
     </dict>
+    <!-- 收到 SIGTERM 後留時間讓錄影收尾、轉檔、上傳；預設 20 秒不夠 -->
+    <key>ExitTimeOut</key>
+    <integer>3600</integer>
     <key>StandardOutPath</key>
-    <string>/tmp/twitch_monitor_shxtou.out</string>
+    <string>/Volumes/t7/project/twitch-monitor/logs/shxtou-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/twitch_monitor_shxtou.err</string>
+    <string>/Volumes/t7/project/twitch-monitor/logs/shxtou-stderr.log</string>
 </dict>
 </plist>

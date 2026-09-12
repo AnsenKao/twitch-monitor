@@ -3,6 +3,7 @@ from .clear_data import clear_empty_data
 from .video_processor import VideoProcessor
 from .discord_notify import send_discord, format_yt_links
 from .filename import sanitize_filename
+from .lifecycle import install_signal_handlers, is_shutting_down, request_shutdown
 
 __all__ = [
     "configure_logging",
@@ -12,4 +13,7 @@ __all__ = [
     "send_discord",
     "format_yt_links",
     "sanitize_filename",
+    "install_signal_handlers",
+    "is_shutting_down",
+    "request_shutdown",
 ]

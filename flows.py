@@ -9,6 +9,7 @@ from utils import (
     send_discord,
     format_yt_links,
     sanitize_filename,
+    is_shutting_down,
 )
 from utils.video_processor import VideoProcessor
 import asyncio
@@ -290,6 +291,11 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
             else:
                 # logger.info(f"{channel_name} is offline. Checking again in {check_interval}s...")
                 pass
+
+            # 錄影與上傳都收尾完成後，才回應先前收到的終止訊號
+            if is_shutting_down():
+                logger.info("Shutdown requested, exiting monitor loop.")
+                break
 
             time.sleep(check_interval)
             

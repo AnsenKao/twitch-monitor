@@ -16,9 +16,12 @@
         <key>SuccessfulExit</key>
         <false/>
     </dict>
+    <!-- 收到 SIGTERM 後留時間讓錄影收尾、轉檔、上傳；預設 20 秒不夠 -->
+    <key>ExitTimeOut</key>
+    <integer>3600</integer>
     <key>StandardOutPath</key>
-    <string>/tmp/twitch_monitor.out</string>
+    <string>/Volumes/t7/project/twitch-monitor/logs/dexterityboost-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/twitch_monitor.err</string>
+    <string>/Volumes/t7/project/twitch-monitor/logs/dexterityboost-stderr.log</string>
 </dict>
 </plist>

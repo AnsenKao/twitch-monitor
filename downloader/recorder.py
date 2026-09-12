@@ -45,14 +45,15 @@ class StreamRecorder:
             try:
                 stdout, stderr = process.communicate()
             except KeyboardInterrupt:
-                self.logger.info("Recording stopping due to user interrupt...")
-                # The subprocess (streamlink) should have received the SIGINT from the OS (Ctrl+C).
-                # We simply wait for it to cleanup and exit gracefully.
+                self.logger.info("Stop requested, asking streamlink to finish the file...")
+                # Ctrl+C 時 streamlink 已由 OS 收到 SIGINT，但 SIGTERM 不會傳給子行程，
+                # 所以一律主動補送一次，確保 .ts 會被正常收尾。
+                process.send_signal(signal.SIGINT)
                 try:
-                    stdout, stderr = process.communicate(timeout=15) 
+                    stdout, stderr = process.communicate(timeout=60)
                 except subprocess.TimeoutExpired:
-                    self.logger.warning("Streamlink did not exit gracefully, sending SIGINT...")
-                    process.send_signal(signal.SIGINT)
+                    self.logger.warning("Streamlink did not exit in time, terminating...")
+                    process.terminate()
                     stdout, stderr = process.communicate()
             
             # Check for success (0) or user interrupt (-2 or 130)

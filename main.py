@@ -1,7 +1,7 @@
 import os
 import argparse
 import dotenv
-from utils import configure_logging, get_logger
+from utils import configure_logging, get_logger, install_signal_handlers
 from flows import auto_detect_and_upload, single_url_flow, upload_existing_flow, live_monitor_flow
 
 dotenv.load_dotenv()
@@ -19,6 +19,7 @@ if __name__ == "__main__":
     log_path = configure_logging(channel=args.monitor)
     logger = get_logger(__name__)
     logger.info(f"Logging to {log_path}")
+    install_signal_handlers(logger)
 
     if args.url:
         single_url_flow(args.url, playlist_id)
