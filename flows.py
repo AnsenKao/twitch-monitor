@@ -4,6 +4,7 @@ from downloader import DownloadFlow
 from downloader.recorder import StreamRecorder
 from uploader import UploadFlow
 from utils import setup_logger, clear_empty_data, send_discord, format_yt_links, sanitize_filename
+from utils.video_processor import VideoProcessor
 import asyncio
 import os
 import requests
@@ -222,6 +223,7 @@ def _resolve_output_name(base_name, fallback_name):
 def live_monitor_flow(channel_name, playlist_id, check_interval=30):
     monitor = StreamMonitor()
     recorder = StreamRecorder()
+    video_processor = VideoProcessor()
     channel_url = f"https://www.twitch.tv/{channel_name}"
     
     logger.info(f"Starting live monitor for channel: {channel_name}")
@@ -260,7 +262,12 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                     if remux_success:
                         # Remove the original TS file
                         os.remove(ts_path)
-                        logger.info("Remuxing successful and TS file removed. Starting upload...")
+                        logger.info("Remuxing successful and TS file removed.")
+                        # 超過 10 小時要先切段，否則單檔會超過 YouTube 的 12 小時上限而上傳失敗
+                        video_processor.check_and_split_if_long(
+                            output_path, base_name, videos_root
+                        )
+                        logger.info("Starting upload...")
                         # Upload the recorded file
                         upload_success, yt_urls, _ = upload_existing_videos(playlist_id)
                         if upload_success:

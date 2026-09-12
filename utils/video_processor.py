@@ -68,7 +68,7 @@ class VideoProcessor:
             logger.error(f"Error getting video duration: {str(e)}")
             return None
 
-    def split_video_by_time(self, input_path, output_dir, segment_duration_hours=6):
+    def split_video_by_time(self, input_path, output_dir, segment_duration_hours=10):
         """
         按時間切割影片
         
@@ -145,7 +145,7 @@ class VideoProcessor:
             logger.error(f"Error splitting video: {str(e)}")
             return []
 
-    def is_video_long(self, video_path, threshold_hours=12):
+    def is_video_long(self, video_path, threshold_hours=10):
         """
         檢查影片是否超過指定時長
         
@@ -159,3 +159,62 @@ class VideoProcessor:
             
         threshold_seconds = threshold_hours * 3600
         return duration > threshold_seconds
+
+    def check_and_split_if_long(
+        self,
+        video_path,
+        video_name,
+        output_root,
+        threshold_hours=10,
+        segment_duration_hours=10,
+    ):
+        """
+        檢查影片長度，超過 threshold_hours 就切成多段並刪除原始檔。
+        VOD 下載與直播錄影兩條路徑共用這個入口。
+
+        :param video_path: 影片檔案路徑
+        :param video_name: 影片名稱（用於建立 {video_name}_segments 目錄）
+        :param output_root: 放置 segments 目錄的父目錄
+        :param threshold_hours: 超過幾小時才需要切割
+        :param segment_duration_hours: 每段的時長（小時）
+        :return: True 表示已切成多段；False 表示未切割（不需要、或切割失敗）
+        """
+        try:
+            if not self.is_video_long(video_path, threshold_hours=threshold_hours):
+                logger.info(
+                    f"Video {video_name} is under {threshold_hours} hours, no splitting needed"
+                )
+                return False
+
+            logger.info(
+                f"Video {video_name} is longer than {threshold_hours} hours, starting to split..."
+            )
+            split_output_dir = os.path.join(output_root, f"{video_name}_segments")
+
+            segments = self.split_video_by_time(
+                input_path=video_path,
+                output_dir=split_output_dir,
+                segment_duration_hours=segment_duration_hours,
+            )
+
+            if not segments:
+                logger.error(f"Failed to split video: {video_name}")
+                return False
+
+            logger.info(f"Successfully split {video_name} into {len(segments)} segments:")
+            for i, segment in enumerate(segments, 1):
+                logger.info(f"  Part {i}: {segment}")
+
+            # 切割成功後刪除原始檔案以節省空間；刪不掉的話原檔與片段會一起被上傳，
+            # 所以這裡失敗要當成錯誤記錄下來。
+            try:
+                os.remove(video_path)
+                logger.info(f"Removed original file: {video_path}")
+            except Exception as e:
+                logger.error(f"Failed to remove original file {video_path}: {str(e)}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error checking/splitting video {video_name}: {str(e)}")
+            return False

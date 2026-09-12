@@ -27,9 +27,13 @@ class DownloadFlow:
                 success = self.downloader.download_video(value, self.path)
                 if success:
                     logger.info(f"{value} has been downloaded to {self.path}")
-                    
+
                     # 檢查影片是否超過10小時，如果是則進行切割
-                    self._check_and_split_video(self.path, sanitized_key)
+                    self.video_processor.check_and_split_if_long(
+                        self.path,
+                        sanitized_key,
+                        os.path.join(self.current_dir, "videos"),
+                    )
                 else:
                     logger.error(f"Failed to download {value}")
                     all_success = False
@@ -37,47 +41,6 @@ class DownloadFlow:
                 logger.error(f"Error downloading {value}: {str(e)}")
                 all_success = False
         return all_success
-
-    def _check_and_split_video(self, video_path, video_name):
-        """
-        檢查影片長度，如果超過10小時則切割成10小時的片段
-        
-        :param video_path: 影片檔案路徑
-        :param video_name: 影片名稱（用於建立切割檔案的目錄）
-        """
-        try:
-            # 檢查影片是否超過10小時
-            if self.video_processor.is_video_long(video_path, threshold_hours=10):
-                logger.info(f"Video {video_name} is longer than 10 hours, starting to split...")
-
-                # 建立切割檔案的輸出目錄
-                split_output_dir = os.path.join(self.current_dir, "videos", f"{video_name}_segments")
-
-                # 切割影片（每10小時一段）
-                segments = self.video_processor.split_video_by_time(
-                    input_path=video_path,
-                    output_dir=split_output_dir,
-                    segment_duration_hours=10
-                )
-                
-                if segments:
-                    logger.info(f"Successfully split {video_name} into {len(segments)} segments:")
-                    for i, segment in enumerate(segments, 1):
-                        logger.info(f"  Part {i}: {segment}")
-                    
-                    # 切割成功後刪除原始檔案以節省空間
-                    try:
-                        os.remove(video_path)
-                        logger.info(f"Removed original file: {video_path}")
-                    except Exception as e:
-                        logger.error(f"Failed to remove original file {video_path}: {str(e)}")
-                else:
-                    logger.error(f"Failed to split video: {video_name}")
-            else:
-                logger.info(f"Video {video_name} is under 10 hours, no splitting needed")
-                
-        except Exception as e:
-            logger.error(f"Error checking/splitting video {video_name}: {str(e)}")
 
     def run(self):
         return self.download()
