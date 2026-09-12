@@ -1,63 +1,82 @@
 # logger.py
 import logging
-from logging.handlers import RotatingFileHandler
 import os
-from datetime import datetime
+from logging.handlers import TimedRotatingFileHandler
+
+LOG_ROOT = "logs"
+
+_LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s | %(message)s"
+_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
-def setup_logger(name, log_file=None, level=logging.INFO):
-    """設定 logger
+def _restore_level_names():
+    """還原標準的大寫等級名稱。
+
+    streamlink 匯入時會把 INFO/WARNING 等改成小寫（見其 logger 模組），
+    導致本專案的 log 等級大小寫不一致。這裡在設定 handler 前復原。
+    """
+    for level, name in (
+        (logging.DEBUG, "DEBUG"),
+        (logging.INFO, "INFO"),
+        (logging.WARNING, "WARNING"),
+        (logging.ERROR, "ERROR"),
+        (logging.CRITICAL, "CRITICAL"),
+    ):
+        logging.addLevelName(level, name)
+
+
+def configure_logging(channel=None, level=logging.INFO):
+    """設定整個 process 的 logging，只在進入點呼叫一次。
 
     Args:
-        name (str): logger 名稱
-        log_file (str, optional): log 檔案名稱. 如果為 None，則使用日期作為檔名
+        channel (str, optional): 頻道名稱。有給的話 log 會寫到
+            logs/<channel>/monitor.log，讓多個 monitor 實例不會寫進同一個檔案；
+            沒給則寫 logs/manual.log。
         level (int, optional): logging 等級. Defaults to logging.INFO.
 
     Returns:
-        logging.Logger: 設定好的 logger
+        str: 實際使用的 log 檔路徑
     """
-    # 建立 logs 目錄（如果不存在）
-    log_dir = "logs"
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    _restore_level_names()
 
-    # 如果沒有指定 log_file，使用日期作為檔名
-    if log_file is None:
-        today = datetime.now().strftime("%Y-%m-%d")
-        log_file = f"{name}_{today}.log"
+    if channel:
+        log_dir = os.path.join(LOG_ROOT, channel)
+        log_name = "monitor.log"
+    else:
+        # --url／手動上傳等一次性執行
+        log_dir = LOG_ROOT
+        log_name = "manual.log"
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, log_name)
 
-    log_path = os.path.join(log_dir, log_file)
+    root = logging.getLogger()
+    root.setLevel(level)
 
-    # 建立 logger
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
+    # 重複呼叫時先清掉舊 handler，避免同一行 log 被寫兩次
+    for handler in root.handlers[:]:
+        root.removeHandler(handler)
+        handler.close()
 
-    # 避免重複添加 handlers
-    if not logger.handlers:
-        # 建立 rotating file handler (最大 10MB，保留 5 個備份)
-        file_handler = RotatingFileHandler(
-            log_path,
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5,
-            encoding="utf-8",
-        )
-        file_handler.setLevel(level)
+    formatter = logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT)
 
-        # 建立 console handler
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(level)
+    # 跨日自動換檔，保留 14 天。長駐 process 也能正確切檔
+    file_handler = TimedRotatingFileHandler(
+        log_path,
+        when="midnight",
+        backupCount=14,
+        encoding="utf-8",
+    )
+    file_handler.suffix = "%Y-%m-%d"
+    file_handler.setFormatter(formatter)
+    root.addHandler(file_handler)
 
-        # 設定 log 格式
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    root.addHandler(console_handler)
 
-        file_handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
+    return log_path
 
-        # 將 handlers 加入 logger
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
 
-    return logger
+def get_logger(name):
+    """取得模組專用的 logger，name 請一律傳 __name__。"""
+    return logging.getLogger(name)

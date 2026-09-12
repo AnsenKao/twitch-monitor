@@ -4,6 +4,9 @@ import json
 from dataclasses import dataclass
 import asyncio
 from playwright.async_api import async_playwright
+from utils import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -38,7 +41,7 @@ class WebsiteDetector:
             self.last_items = items
             return True
         except Exception as e:
-            print(f"Error detecting items: {str(e)}")
+            logger.error(f"Error detecting items: {str(e)}")
             return False
 
     async def _detect_async(self) -> Dict[str, str]:
@@ -70,8 +73,8 @@ class WebsiteDetector:
         while True:
             has_changed = await self.detect_once()
             if has_changed:
-                print(f"Changes detected at {datetime.now()}!")
-                print(
+                logger.info(f"Changes detected at {datetime.now()}!")
+                logger.info(
                     f"Current items: {json.dumps(self.last_items, indent=2, ensure_ascii=False)}"
                 )
                 return True

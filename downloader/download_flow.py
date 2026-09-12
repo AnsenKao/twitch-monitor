@@ -1,10 +1,10 @@
 from downloader import YTDLPDownloader
-from utils import setup_logger, sanitize_filename
+from utils import get_logger, sanitize_filename
 from utils.video_processor import VideoProcessor
 import os
 import time
 
-logger = setup_logger("log")
+logger = get_logger(__name__)
 
 
 class DownloadFlow:

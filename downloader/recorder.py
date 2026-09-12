@@ -2,11 +2,11 @@ import os
 import signal
 import subprocess
 import time
-from utils import setup_logger
+from utils import get_logger
 
 class StreamRecorder:
     def __init__(self):
-        self.logger = setup_logger("Recorder", log_file="recorder.log")
+        self.logger = get_logger(__name__)
 
     def start_recording(self, channel_url, output_path):
         """

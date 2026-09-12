@@ -2,11 +2,11 @@ import os
 
 import requests
 
-from .logger import setup_logger
+from .logger import get_logger
 
 WEBHOOK_ENV_KEY = "DISCORD_WEBHOOK"
 
-logger = setup_logger("log")
+logger = get_logger(__name__)
 
 
 def send_discord(message: str) -> None:

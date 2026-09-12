@@ -1,9 +1,9 @@
 from detection import WebsiteDetector
-from utils import setup_logger
+from utils import get_logger
 import asyncio
 import json
 
-logger = setup_logger("log")
+logger = get_logger(__name__)
 
 
 class DetectionFlow(WebsiteDetector):

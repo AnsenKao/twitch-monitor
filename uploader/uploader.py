@@ -4,9 +4,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import pickle
-from utils import setup_logger, clear_empty_data
+from utils import get_logger, clear_empty_data
 
-logger = setup_logger("credential")
+logger = get_logger(__name__)
 
 
 class YouTubeUploader:
@@ -89,10 +89,11 @@ class YouTubeUploader:
         while response is None:
             status, response = request.next_chunk()
             if status:
-                print(f"Uploaded {int(status.progress() * 100)}%")
+                # 每個 chunk 都會進來，記在 debug 避免洗版
+                logger.debug(f"Uploaded {int(status.progress() * 100)}%")
 
         video_id = response["id"]
-        print(f"Upload Complete! Video ID: {video_id}")
+        logger.info(f"Upload complete! Video ID: {video_id}")
 
         if playlist_id:
             self.add_video_to_playlist(video_id, playlist_id)

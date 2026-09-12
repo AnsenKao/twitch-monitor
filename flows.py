@@ -3,7 +3,13 @@ from detection.monitor import StreamMonitor, get_twitch_metadata
 from downloader import DownloadFlow
 from downloader.recorder import StreamRecorder
 from uploader import UploadFlow
-from utils import setup_logger, clear_empty_data, send_discord, format_yt_links, sanitize_filename
+from utils import (
+    get_logger,
+    clear_empty_data,
+    send_discord,
+    format_yt_links,
+    sanitize_filename,
+)
 from utils.video_processor import VideoProcessor
 import asyncio
 import os
@@ -11,7 +17,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 
-logger = setup_logger("log")
+logger = get_logger(__name__)
 videos_root = "downloader/videos/"
 
 
@@ -284,7 +290,7 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
             else:
                 # logger.info(f"{channel_name} is offline. Checking again in {check_interval}s...")
                 pass
-            
+
             time.sleep(check_interval)
             
         except KeyboardInterrupt:

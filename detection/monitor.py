@@ -1,4 +1,4 @@
-from utils import setup_logger
+from utils import get_logger
 from streamlink import Streamlink
 
 
@@ -30,7 +30,7 @@ def get_twitch_metadata(url, session=None, logger=None):
 
 class StreamMonitor:
     def __init__(self):
-        self.logger = setup_logger("Monitor", log_file="monitor.log")
+        self.logger = get_logger(__name__)
         self.session = Streamlink()
 
     def check_live_status(self, channel_url):

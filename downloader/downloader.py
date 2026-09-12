@@ -1,4 +1,7 @@
 import subprocess
+from utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class YTDLPDownloader:
@@ -35,18 +38,20 @@ class YTDLPDownloader:
 
             # 實時讀取並輸出進度
             for line in process.stdout:
-                print(line, end="", flush=True)
+                stripped = line.rstrip()
+                if stripped:
+                    logger.debug(stripped)
 
             # 等待進程完成
             return_code = process.wait(timeout=3600)  # 1小時超時
             return return_code == 0
 
         except subprocess.TimeoutExpired:
-            print(f"下載超時: {video_url}")
+            logger.error(f"下載超時: {video_url}")
             process.kill()
             return False
         except Exception as e:
-            print(f"發生未預期的錯誤: {str(e)}")
+            logger.error(f"發生未預期的錯誤: {str(e)}")
             if "process" in locals():
                 process.kill()
             return False

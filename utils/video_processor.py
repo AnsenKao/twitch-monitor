@@ -2,9 +2,9 @@ import subprocess
 import os
 import json
 import shutil
-from utils import setup_logger
+from utils import get_logger
 
-logger = setup_logger("log")
+logger = get_logger(__name__)
 
 
 class VideoProcessor:
