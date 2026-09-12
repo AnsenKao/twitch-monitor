@@ -2,7 +2,11 @@ import os
 
 import requests
 
+from .logger import setup_logger
+
 WEBHOOK_ENV_KEY = "DISCORD_WEBHOOK"
+
+logger = setup_logger("log")
 
 
 def send_discord(message: str) -> None:
@@ -10,12 +14,18 @@ def send_discord(message: str) -> None:
     # 在 module 層讀會拿到 None。
     webhook_url = os.getenv(WEBHOOK_ENV_KEY)
     if not webhook_url:
-        print(f"未設定 {WEBHOOK_ENV_KEY}，略過 Discord 通知：{message}")
+        logger.error(f"未設定 {WEBHOOK_ENV_KEY}，略過 Discord 通知：{message}")
         return
     try:
-        requests.post(webhook_url, json={"content": message}, timeout=10)
+        resp = requests.post(webhook_url, json={"content": message}, timeout=10)
     except Exception as e:
-        print(f"Discord 通知發送失敗: {e}")
+        logger.error(f"Discord 通知發送失敗（連線錯誤）：{e}")
+        return
+    # 失效的 webhook 會回 401/404 而不是拋例外，不檢查狀態碼的話通知會靜默失敗。
+    if resp.status_code >= 400:
+        logger.error(
+            f"Discord 通知發送失敗（HTTP {resp.status_code}）：{resp.text[:200]}"
+        )
 
 
 def format_yt_links(yt_urls, names=None) -> str:
