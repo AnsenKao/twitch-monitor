@@ -9,3 +9,6 @@ latest.json
 .env
 .venv
 .DS_Store
+
+# 直播錄影的暫存目錄（錄影中的 .ts 可達數十 GB）
+downloader/videos/
