@@ -253,12 +253,15 @@ def _write_recording_marker(base_name, channel_name, stream_title):
 
 
 def _remove_recording_marker(base_name):
+    """刪不掉只記錄錯誤、不往上拋，回傳是否已不存在。"""
     try:
         os.remove(_marker_path(base_name))
     except FileNotFoundError:
         pass
     except OSError as e:
         logger.error(f"Failed to remove recording marker for {base_name}: {e}")
+        return False
+    return True
 
 
 def _warn_interrupted_recordings(channel_name):
@@ -281,6 +284,11 @@ def _warn_interrupted_recordings(channel_name):
         if marker.get("channel") != channel_name:
             continue
 
+        # 先刪紀錄檔再警告。刪除失敗不能讓 process 結束，否則 launchd 會一直
+        # 重啟、每次都發同一則警告，monitor 也永遠起不來。
+        if not _remove_recording_marker(name[: -len(".recording.json")]):
+            logger.error(f"{name} could not be removed; this warning will repeat on next start.")
+
         title = marker.get("title") or "(無標題)"
         logger.warning(
             f"Previous recording was interrupted: {title} "
@@ -293,7 +301,6 @@ def _warn_interrupted_recordings(channel_name):
             f"VOD 列表：https://www.twitch.tv/{channel_name}/videos?filter=archives\n"
             f"殘留檔案：{videos_root}{marker.get('file')}.*"
         )
-        os.remove(path)
 
 
 def live_monitor_flow(channel_name, playlist_id, check_interval=30):
