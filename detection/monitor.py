@@ -1,4 +1,5 @@
 import re
+import time
 from urllib.parse import urlsplit
 
 from utils import get_logger
@@ -27,35 +28,59 @@ def summarize_error(exc):
     return f"{type(exc).__name__}: {message}"
 
 
-class _DedupErrorLogger:
-    """連續出現的同一種錯誤只記一次，恢復或換錯誤時補記次數。
+class _OutageTracker:
+    """網路偶爾斷一下不記錄，連續失敗才記錯誤，恢復時記中斷多久。
 
-    離線輪詢每 30 秒一次，網路不穩時同一則錯誤會洗掉整個 log。
+    輪詢每 30 秒一次，單次失敗通常下一輪就好了，不影響任何事。
+    連續失敗代表真的斷線（例如剛好在開台時斷線導致沒錄到），才值得留紀錄。
     """
 
-    def __init__(self, logger):
+    def __init__(self, logger, threshold=3):
         self._logger = logger
-        self._last = None
-        self._repeats = 0
+        self._threshold = threshold
+        self._failures = 0
+        self._started_at = None  # 第一次失敗的時間，用來算中斷多久
+        self._started_label = None
+        self._failed_this_check = False
+
+    def begin_check(self):
+        self._failed_this_check = False
 
     def error(self, message):
-        if message == self._last:
-            self._repeats += 1
+        """get_twitch_metadata 失敗時會呼叫。"""
+        self._failed_this_check = True
+        self._failures += 1
+        if self._failures == 1:
+            self._started_at = time.monotonic()
+            self._started_label = time.strftime("%H:%M:%S")
+        if self._failures == self._threshold:
+            self._logger.error(
+                f"連續 {self._failures} 次取得直播狀態失敗（{self._started_label} 起）：{message}"
+            )
+
+    def end_check(self):
+        """這一輪沒有失敗就代表連線正常（開台或離線都算）。"""
+        if self._failed_this_check or not self._failures:
             return
-        self._flush()
-        self._logger.error(message)
-        self._last = message
-        self._repeats = 0
+        if self._failures >= self._threshold:
+            self._logger.info(
+                f"已恢復，中斷約 {_format_duration(time.monotonic() - self._started_at)}"
+                f"（{self._started_label} 起，共失敗 {self._failures} 次）"
+            )
+        self._failures = 0
+        self._started_at = None
+        self._started_label = None
 
-    def _flush(self):
-        if self._last is not None and self._repeats:
-            self._logger.error(f"(前一則錯誤又重複了 {self._repeats} 次)")
-        self._repeats = 0
 
-    def reset(self):
-        """成功取得資料時呼叫，讓下次同樣的錯誤會重新記錄。"""
-        self._flush()
-        self._last = None
+def _format_duration(seconds):
+    seconds = int(seconds)
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours} 小時 {minutes} 分"
+    if minutes:
+        return f"{minutes} 分 {secs} 秒"
+    return f"{secs} 秒"
 
 
 def get_twitch_metadata(url, session=None, logger=None):
@@ -87,7 +112,7 @@ def get_twitch_metadata(url, session=None, logger=None):
 class StreamMonitor:
     def __init__(self):
         self.logger = get_logger(__name__)
-        self._error_logger = _DedupErrorLogger(self.logger)
+        self._outage = _OutageTracker(self.logger)
         self.session = Streamlink()
 
     def check_live_status(self, channel_url):
@@ -96,9 +121,9 @@ class StreamMonitor:
         Returns a dict with the stream list and metadata (title/author/category)
         if live, None otherwise.
         """
+        self._outage.begin_check()
         result = get_twitch_metadata(
-            channel_url, session=self.session, logger=self._error_logger
+            channel_url, session=self.session, logger=self._outage
         )
-        if result:
-            self._error_logger.reset()
+        self._outage.end_check()
         return result
