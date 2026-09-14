@@ -1,6 +1,7 @@
 # logger.py
 import logging
 import os
+import sys
 from logging.handlers import TimedRotatingFileHandler
 
 LOG_ROOT = "logs"
@@ -70,9 +71,13 @@ def configure_logging(channel=None, level=logging.INFO):
     file_handler.setFormatter(formatter)
     root.addHandler(file_handler)
 
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    root.addHandler(console_handler)
+    # 只有在終端機手動執行時才印到畫面。launchd 底下 stderr 是導到檔案的，
+    # 印出來會變成 monitor.log 的完整複本，而且那個檔不會切檔。
+    # 這樣 stderr 檔只留下未捕捉的 traceback。
+    if sys.stderr.isatty():
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        root.addHandler(console_handler)
 
     return log_path
 
