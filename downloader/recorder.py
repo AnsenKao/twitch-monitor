@@ -50,7 +50,8 @@ class StreamRecorder:
                 # 所以一律主動補送一次，確保 .ts 會被正常收尾。
                 process.send_signal(signal.SIGINT)
                 try:
-                    stdout, stderr = process.communicate(timeout=60)
+                    # launchd 60 秒後會 SIGKILL，要在那之前留時間走 terminate
+                    stdout, stderr = process.communicate(timeout=30)
                 except subprocess.TimeoutExpired:
                     self.logger.warning("Streamlink did not exit in time, terminating...")
                     process.terminate()
@@ -75,6 +76,9 @@ class StreamRecorder:
         Returns True if successful, False otherwise.
         """
         self.logger.info(f"Remuxing {input_path} to {output_path}")
+        # 先寫到 .part，成功才改名。轉檔中被砍掉時才不會留下不完整的 .mp4，
+        # 被下一場的 upload_existing_videos 當成成品上傳。
+        part_path = f"{output_path}.part"
         try:
             command = [
                 "ffmpeg",
@@ -82,7 +86,8 @@ class StreamRecorder:
                 "-i", input_path,
                 "-c", "copy",
                 "-bsf:a", "aac_adtstoasc", # Fix AAC bitstream for MP4
-                output_path
+                "-f", "mp4", # .part 副檔名無法推斷格式
+                part_path
             ]
             
             process = subprocess.Popen(
@@ -94,8 +99,11 @@ class StreamRecorder:
             
             if process.returncode != 0:
                 self.logger.error(f"FFmpeg remux failed: {stderr.decode()}")
+                if os.path.exists(part_path):
+                    os.remove(part_path)
                 return False
-                
+
+            os.replace(part_path, output_path)
             self.logger.info("Remuxing complete.")
             return True
         except Exception as e:

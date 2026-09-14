@@ -13,6 +13,7 @@ from utils import (
 )
 from utils.video_processor import VideoProcessor
 import asyncio
+import json
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -227,6 +228,74 @@ def _resolve_output_name(base_name, fallback_name):
     return candidate
 
 
+def _marker_path(base_name):
+    return os.path.join(videos_root, f"{base_name}.recording.json")
+
+
+def _write_recording_marker(base_name, channel_name, stream_title):
+    """錄影開始時留下紀錄，流程正常走完才刪。
+
+    服務在錄影中被重啟時錄影一定不完整，launchd 也只給 60 秒不夠轉檔上傳，
+    所以不自動補救，改由下次啟動時提醒去 VOD 重抓。檔名經過合法化會跟
+    直播標題不同，這裡保留原始標題方便在 VOD 列表裡找。
+    """
+    marker = {
+        "channel": channel_name,
+        "title": stream_title,
+        "file": base_name,
+        "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    try:
+        with open(_marker_path(base_name), "w", encoding="utf-8") as f:
+            json.dump(marker, f, ensure_ascii=False)
+    except OSError as e:
+        logger.error(f"Failed to write recording marker for {base_name}: {e}")
+
+
+def _remove_recording_marker(base_name):
+    try:
+        os.remove(_marker_path(base_name))
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        logger.error(f"Failed to remove recording marker for {base_name}: {e}")
+
+
+def _warn_interrupted_recordings(channel_name):
+    """啟動時檢查上次是否在錄影中被中斷，有的話發警告。
+
+    兩個頻道共用 videos/，所以只處理自己頻道的紀錄。每筆只警告一次。
+    """
+    if not os.path.isdir(videos_root):
+        return
+    for name in sorted(os.listdir(videos_root)):
+        if not name.endswith(".recording.json"):
+            continue
+        path = os.path.join(videos_root, name)
+        try:
+            with open(path, encoding="utf-8") as f:
+                marker = json.load(f)
+        except (OSError, ValueError) as e:
+            logger.error(f"Unreadable recording marker {name}: {e}")
+            continue
+        if marker.get("channel") != channel_name:
+            continue
+
+        title = marker.get("title") or "(無標題)"
+        logger.warning(
+            f"Previous recording was interrupted: {title} "
+            f"(started {marker.get('started_at')}, file {marker.get('file')})"
+        )
+        send_discord(
+            f"⚠️ {channel_name} 上次錄影被中斷，檔案不完整，請從 VOD 重新下載\n"
+            f"標題：{title}\n"
+            f"開始錄影：{marker.get('started_at')}\n"
+            f"VOD 列表：https://www.twitch.tv/{channel_name}/videos?filter=archives\n"
+            f"殘留檔案：{videos_root}{marker.get('file')}.*"
+        )
+        os.remove(path)
+
+
 def live_monitor_flow(channel_name, playlist_id, check_interval=30):
     monitor = StreamMonitor()
     recorder = StreamRecorder()
@@ -234,6 +303,7 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
     channel_url = f"https://www.twitch.tv/{channel_name}"
     
     logger.info(f"Starting live monitor for channel: {channel_name}")
+    _warn_interrupted_recordings(channel_name)
     
     while True:
         try:
@@ -257,9 +327,19 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                 ts_path = os.path.join(videos_root, f"{base_name}.ts")
                 output_path = os.path.join(videos_root, f"{base_name}.mp4")
                 
+                _write_recording_marker(base_name, channel_name, stream_title)
+
                 # Start recording to .ts (resilient to interruption)
                 success = recorder.start_recording(channel_url, ts_path)
-                
+
+                # 錄影中收到終止訊號：直播沒錄完，也沒時間轉檔上傳。
+                # 保留 .ts 和紀錄檔直接離開，下次啟動時會發警告。
+                if is_shutting_down():
+                    logger.warning(
+                        f"Shutdown during recording, keeping {ts_path} unprocessed."
+                    )
+                    break
+
                 if success and os.path.exists(ts_path):
                     logger.info("Recording finished. Remuxing to MP4...")
                     
@@ -288,11 +368,14 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                 else:
                     logger.warning("Recording finished but no file created or failed.")
                     send_discord(f"❌ {channel_name} 錄製失敗，無法產生檔案")
+
+                # 已經走到有通知的結局（成功或失敗），不需要下次啟動再警告
+                _remove_recording_marker(base_name)
             else:
                 # logger.info(f"{channel_name} is offline. Checking again in {check_interval}s...")
                 pass
 
-            # 錄影與上傳都收尾完成後，才回應先前收到的終止訊號
+            # 離線等待或上傳完成後，才回應先前收到的終止訊號
             if is_shutting_down():
                 logger.info("Shutdown requested, exiting monitor loop.")
                 break
