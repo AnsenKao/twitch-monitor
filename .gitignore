@@ -5,6 +5,8 @@ credentials.pkl
 yt-dlp.exe
 *mp4
 *.log
+# 每日切檔會產生 monitor.log.2026-09-13 這種不是 .log 結尾的檔
+logs/
 latest.json
 .env
 .venv
