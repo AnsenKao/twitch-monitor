@@ -303,6 +303,29 @@ def _warn_interrupted_recordings(channel_name):
         )
 
 
+def _retry_stream_title(monitor, channel_url, attempts=3, delay=3):
+    """開台當下標題偶爾查不到，隔幾秒重問。
+
+    streamlink 的 Twitch plugin 是用另一支 API 取 metadata，失敗時會靜默把
+    title 留成 None（見 plugins/twitch.py 的 _get_metadata），串流本身照樣
+    抓得到，所以不會有例外也不會有錯誤 log。一次偶發失敗就足以讓整支影片
+    用時間戳當檔名和 YouTube 標題，所以這裡多問幾次。
+
+    重試會延後開始錄影（最多 attempts * delay 秒），取不到就放棄回傳 ""。
+    """
+    for attempt in range(1, attempts + 1):
+        if is_shutting_down():
+            return ""
+        time.sleep(delay)
+        info = get_twitch_metadata(channel_url, session=monitor.session, logger=logger)
+        title = (info.get("title") or "").strip() if info else ""
+        if title:
+            logger.info(f"Stream title resolved on retry {attempt}: {title}")
+            return title
+    logger.warning(f"Stream title still unavailable after {attempts} retries")
+    return ""
+
+
 def live_monitor_flow(channel_name, playlist_id, check_interval=30):
     monitor = StreamMonitor()
     recorder = StreamRecorder()
@@ -319,11 +342,10 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
             
             if stream_info:
                 stream_title = (stream_info.get("title") or "").strip()
+                if not stream_title:
+                    logger.warning(f"{channel_name} is LIVE but the title came back empty; retrying...")
+                    stream_title = _retry_stream_title(monitor, channel_url)
                 logger.info(f"{channel_name} is LIVE! Title: {stream_title or '(無標題)'}")
-                if stream_title:
-                    send_discord(f"🔴 {channel_name} 開始直播，準備錄製...\n標題：{stream_title}")
-                else:
-                    send_discord(f"🔴 {channel_name} 開始直播，準備錄製...")
 
                 # 以直播標題當檔名（同時也會成為 YouTube 影片標題），沒有標題才退回時間戳
                 fallback_name = f"{channel_name}_{int(time.time())}"
@@ -331,6 +353,15 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                     sanitize_filename(stream_title, fallback=fallback_name), fallback_name
                 )
                 logger.info(f"Using filename: {base_name}")
+
+                if stream_title:
+                    send_discord(f"🔴 {channel_name} 開始直播，準備錄製...\n標題：{stream_title}")
+                else:
+                    # 取不到標題不影響錄影，但上傳後的 YouTube 標題會是時間戳，要手動改
+                    send_discord(
+                        f"🔴 {channel_name} 開始直播，準備錄製...\n"
+                        f"⚠️ 取不到直播標題，改用 `{base_name}` 當檔名與 YouTube 標題，上傳後請手動改名"
+                    )
                 ts_path = os.path.join(videos_root, f"{base_name}.ts")
                 output_path = os.path.join(videos_root, f"{base_name}.mp4")
                 
