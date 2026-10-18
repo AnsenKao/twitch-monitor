@@ -59,8 +59,11 @@ class StreamRecorder:
             
             # Check for success (0) or user interrupt (-2 or 130)
             if process.returncode != 0 and process.returncode != -2 and process.returncode != 130:
-                self.logger.error(f"Streamlink exited with error code {process.returncode}")
-                # self.logger.error(f"Stderr: {stderr.decode()}")
+                # streamlink 的 log 走 stdout、最後的 "error:" 走 stderr，兩邊都取尾巴才看得出原因
+                tail = (stdout + stderr).decode(errors="replace").strip().splitlines()[-5:]
+                self.logger.error(
+                    f"Streamlink exited with error code {process.returncode}: " + " | ".join(tail)
+                )
                 return False
             
             self.logger.info(f"Recording finished: {output_path}")
