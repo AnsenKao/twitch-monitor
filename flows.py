@@ -15,8 +15,10 @@ from utils.video_processor import VideoProcessor
 import asyncio
 import json
 import os
+import queue
 import requests
 from bs4 import BeautifulSoup
+import threading
 import time
 
 logger = get_logger(__name__)
@@ -216,12 +218,15 @@ def upload_existing_flow(playlist_id):
 def _resolve_output_name(base_name, fallback_name):
     """
     避免和既有檔案同名（例如上次上傳失敗留下的檔案）而被覆蓋。
+
+    背景轉檔上傳期間 .ts／.mp4 可能已經刪掉、只剩切段目錄，所以也要看
+    recording marker 和 _segments，否則同標題重開台會寫進同一個切段目錄。
     """
     candidate = base_name or fallback_name
     suffix = 2
     while any(
         os.path.exists(os.path.join(videos_root, f"{candidate}{ext}"))
-        for ext in (".ts", ".mp4")
+        for ext in (".ts", ".mp4", ".recording.json", "_segments")
     ):
         candidate = f"{base_name}_{suffix}"
         suffix += 1
@@ -245,6 +250,26 @@ def _write_recording_marker(base_name, channel_name, stream_title):
         "file": base_name,
         "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
+    _save_recording_marker(base_name, marker)
+
+
+def _mark_recording_finished(base_name):
+    """錄影已完整結束、交給背景轉檔上傳時標記。
+
+    之後若在轉檔上傳途中被重啟，影片本身是完整的，下次啟動的提醒要改成
+    「手動處理殘留檔案」而不是「去 VOD 重抓」。
+    """
+    try:
+        with open(_marker_path(base_name), encoding="utf-8") as f:
+            marker = json.load(f)
+    except (OSError, ValueError) as e:
+        logger.error(f"Failed to read recording marker for {base_name}: {e}")
+        return
+    marker["recorded_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    _save_recording_marker(base_name, marker)
+
+
+def _save_recording_marker(base_name, marker):
     try:
         with open(_marker_path(base_name), "w", encoding="utf-8") as f:
             json.dump(marker, f, ensure_ascii=False)
@@ -290,6 +315,22 @@ def _warn_interrupted_recordings(channel_name):
             logger.error(f"{name} could not be removed; this warning will repeat on next start.")
 
         title = marker.get("title") or "(無標題)"
+        if marker.get("recorded_at"):
+            # 錄影有錄完，是背景的轉檔／上傳被中斷：檔案完整，不必去 VOD 重抓。
+            # .mp4 會在下次上傳時一起傳，.ts 則需要手動轉檔。
+            logger.warning(
+                f"Previous post-processing was interrupted: {title} "
+                f"(recorded {marker.get('recorded_at')}, file {marker.get('file')})"
+            )
+            send_discord(
+                f"⚠️ {channel_name} 上次錄影已完成，但轉檔或上傳被中斷\n"
+                f"標題：{title}\n"
+                f"錄影結束：{marker.get('recorded_at')}\n"
+                f"殘留檔案：{videos_root}{marker.get('file')}.*\n"
+                f".mp4 會在下次上傳時一起上傳；若只剩 .ts 請手動轉檔"
+            )
+            continue
+
         logger.warning(
             f"Previous recording was interrupted: {title} "
             f"(started {marker.get('started_at')}, file {marker.get('file')})"
@@ -326,12 +367,94 @@ def _retry_stream_title(monitor, channel_url, attempts=3, delay=3):
     return ""
 
 
+def _post_process_recording(
+    recorder, video_processor, channel_name, playlist_id,
+    base_name, stream_title, ts_path, output_path,
+):
+    """錄完的 .ts 轉成 mp4、必要時切段、上傳並通知。在背景執行緒裡跑。"""
+    logger.info(f"Post-processing {base_name}: remuxing to MP4...")
+    if recorder.remux_video(ts_path, output_path):
+        os.remove(ts_path)
+        logger.info("Remuxing successful and TS file removed.")
+        # 超過 10 小時要先切段，否則單檔會超過 YouTube 的 12 小時上限而上傳失敗
+        video_processor.check_and_split_if_long(output_path, base_name, videos_root)
+        logger.info("Starting upload...")
+        upload_success, yt_urls, _ = upload_existing_videos(playlist_id)
+        if upload_success:
+            yt_links = format_yt_links(yt_urls)
+            send_discord(f"✅ {channel_name} 直播錄製並上傳完成：{stream_title or base_name}\n{yt_links}")
+        else:
+            send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗：{stream_title or base_name}")
+    else:
+        logger.error("Remuxing failed. Keeping TS file.")
+        send_discord(f"❌ {channel_name} 錄製後轉檔失敗")
+
+    # 已經走到有通知的結局（成功或失敗），不需要下次啟動再警告
+    _remove_recording_marker(base_name)
+
+
+class _PostProcessWorker:
+    """用單一背景執行緒依序處理錄完的影片。
+
+    只開一條執行緒是刻意的：upload_existing_videos 會上傳整個 videos/，
+    兩份轉檔上傳同時跑會互相搶檔案。新的錄影只會寫 .ts，不會被上傳撿走。
+
+    執行緒是 daemon：launchd 停服務時只給 60 秒，長時間的上傳不可能等完，
+    被中斷的工作由 recording marker 在下次啟動時提醒。
+    """
+
+    _SHUTDOWN_WAIT = 20  # 秒，讓剛好快結束的工作有機會收尾
+
+    def __init__(self):
+        self._jobs = queue.Queue()
+        self._thread = threading.Thread(
+            target=self._run, name="post-process", daemon=True
+        )
+        self._thread.start()
+
+    def submit(self, func, *args):
+        self._jobs.put((func, args))
+
+    def pending(self):
+        """尚未完成的工作數（包含正在跑的那一個）。"""
+        return self._jobs.unfinished_tasks
+
+    def shutdown(self):
+        if not self.pending():
+            return
+        logger.warning(
+            f"{self.pending()} post-processing job(s) still running, "
+            f"waiting up to {self._SHUTDOWN_WAIT}s..."
+        )
+        deadline = time.monotonic() + self._SHUTDOWN_WAIT
+        while self.pending() and time.monotonic() < deadline:
+            time.sleep(1)
+        if self.pending():
+            logger.warning(
+                "Exiting with unfinished post-processing; it will be reported on next start."
+            )
+
+    def _run(self):
+        while True:
+            func, args = self._jobs.get()
+            try:
+                func(*args)
+            except Exception as e:
+                # 一支影片出錯不能讓整條背景執行緒掛掉，後面的錄影還要處理。
+                # marker 會留著，下次啟動時也會再提醒一次。
+                logger.error(f"Post-processing failed: {e}")
+                send_discord(f"❌ 錄影後的轉檔或上傳發生錯誤：{e}")
+            finally:
+                self._jobs.task_done()
+
+
 def live_monitor_flow(channel_name, playlist_id, check_interval=30):
     monitor = StreamMonitor()
     recorder = StreamRecorder()
     video_processor = VideoProcessor()
+    post_processor = _PostProcessWorker()
     channel_url = f"https://www.twitch.tv/{channel_name}"
-    
+
     logger.info(f"Starting live monitor for channel: {channel_name}")
     _warn_interrupted_recordings(channel_name)
     
@@ -379,50 +502,39 @@ def live_monitor_flow(channel_name, playlist_id, check_interval=30):
                     break
 
                 if success and os.path.exists(ts_path):
-                    logger.info("Recording finished. Remuxing to MP4...")
-                    
-                    # Remux to MP4
-                    remux_success = recorder.remux_video(ts_path, output_path)
-                    
-                    if remux_success:
-                        # Remove the original TS file
-                        os.remove(ts_path)
-                        logger.info("Remuxing successful and TS file removed.")
-                        # 超過 10 小時要先切段，否則單檔會超過 YouTube 的 12 小時上限而上傳失敗
-                        video_processor.check_and_split_if_long(
-                            output_path, base_name, videos_root
-                        )
-                        logger.info("Starting upload...")
-                        # Upload the recorded file
-                        upload_success, yt_urls, _ = upload_existing_videos(playlist_id)
-                        if upload_success:
-                            yt_links = format_yt_links(yt_urls)
-                            send_discord(f"✅ {channel_name} 直播錄製並上傳完成：{stream_title or base_name}\n{yt_links}")
-                        else:
-                            send_discord(f"❌ {channel_name} 直播錄製完成但上傳失敗：{stream_title or base_name}")
-                    else:
-                        logger.error("Remuxing failed. Keeping TS file.")
-                        send_discord(f"❌ {channel_name} 錄製後轉檔失敗")
+                    # 轉檔、切割、上傳交給背景，主迴圈馬上回去偵測，
+                    # 主播斷線後重開台才不會在上傳期間漏錄
+                    _mark_recording_finished(base_name)
+                    post_processor.submit(
+                        _post_process_recording,
+                        recorder, video_processor, channel_name, playlist_id,
+                        base_name, stream_title, ts_path, output_path,
+                    )
+                    logger.info(
+                        f"Recording finished, queued for post-processing "
+                        f"({post_processor.pending()} pending). Resuming live checks."
+                    )
                 else:
                     logger.warning("Recording finished but no file created or failed.")
                     send_discord(f"❌ {channel_name} 錄製失敗，無法產生檔案")
-
-                # 已經走到有通知的結局（成功或失敗），不需要下次啟動再警告
-                _remove_recording_marker(base_name)
+                    # 已經走到有通知的結局，不需要下次啟動再警告
+                    _remove_recording_marker(base_name)
             else:
                 # logger.info(f"{channel_name} is offline. Checking again in {check_interval}s...")
                 pass
 
-            # 離線等待或上傳完成後，才回應先前收到的終止訊號
+            # 錄影結束或離線等待時，才回應先前收到的終止訊號
             if is_shutting_down():
                 logger.info("Shutdown requested, exiting monitor loop.")
                 break
 
             time.sleep(check_interval)
-            
+
         except KeyboardInterrupt:
             logger.info("Monitor stopped by user.")
             break
         except Exception as e:
             logger.error(f"Error in live_monitor_flow: {e}")
             time.sleep(check_interval)
+
+    post_processor.shutdown()
